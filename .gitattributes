@@ -1,0 +1,4 @@
+# 保持 shell 脚本为 LF，确保在 Ubuntu 服务器上可用
+*.sh text eol=lf
+*.sql text eol=lf
+*.yml text eol=lf

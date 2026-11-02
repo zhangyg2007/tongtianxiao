@@ -1,0 +1,59 @@
+# M1 阶段部署编排：BettaFish 基座 + PostgreSQL(pgvector)
+# 用法（在仓库根目录执行）:
+#   cp .env.example .env && vim .env   # 先完成配置
+#   docker compose -f deploy/docker-compose.m1.yml up -d
+#
+# 相对路径均以本文件所在 deploy/ 目录为基准。
+
+services:
+  bettafish:
+    image: ghcr.io/666ghj/bettafish:latest
+    # 国内镜像加速: image: ghcr.nju.edu.cn/666ghj/bettafish:latest
+    container_name: bettafish
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STREAMLIT_SERVER_ENABLE_FILE_WATCHER=false
+    ports:
+      - "5000:5000"
+      - "8501:8501"
+      - "8502:8502"
+      - "8503:8503"
+    volumes:
+      - ../logs:/app/logs
+      - ../final_reports:/app/final_reports
+      - ../.env:/app/.env
+      - ../insight_engine_streamlit_reports:/app/insight_engine_streamlit_reports
+      - ../media_engine_streamlit_reports:/app/media_engine_streamlit_reports
+      - ../query_engine_streamlit_reports:/app/query_engine_streamlit_reports
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # 镜像内不保证有 curl，使用 python 标准库探活
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:5000/api/status', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  db:
+    # postgres:15 官方镜像不含 pgvector，使用 pgvector 官方镜像
+    image: pgvector/pgvector:pg15
+    container_name: bettafish-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bettafish}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bettafish}
+      POSTGRES_DB: ${POSTGRES_DB:-bettafish}
+    ports:
+      - "${POSTGRES_PORT:-5444}:5432"
+    volumes:
+      - ../db_data:/var/lib/postgresql/data
+      # 首次初始化时自动执行（启用 pgvector 扩展）
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bettafish} -d ${POSTGRES_DB:-bettafish}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

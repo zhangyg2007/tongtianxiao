@@ -1,0 +1,117 @@
+<!-- index.wxml -->
+<view class="page-container">
+  <!-- 欢迎区域 -->
+  <view class="welcome-section">
+    <text class="welcome-title">微舆舆情分析系统</text>
+    <text class="welcome-subtitle">洞察舆情，把握未来</text>
+  </view>
+
+  <!-- 快速分析入口 -->
+  <view class="quick-analysis-section">
+    <view class="card">
+      <text class="section-title">快速分析</text>
+      <input 
+        class="input" 
+        placeholder="请输入要分析的关键词" 
+        bindinput="onKeywordInput"
+        value="{{keyword}}"
+      />
+      <button 
+        class="btn-primary" 
+        bindtap="startAnalysis"
+        disabled="{{!keyword}}"
+      >
+        开始分析
+      </button>
+    </view>
+  </view>
+
+  <!-- 热门话题 -->
+  <view class="hot-topics-section">
+    <view class="section-header">
+      <text class="section-title">热门话题</text>
+      <text class="more-link" bindtap="viewAllTopics">查看全部</text>
+    </view>
+    <view class="topic-list">
+      <view 
+        class="topic-item" 
+        wx:for="{{hotTopics}}" 
+        wx:key="id"
+        bindtap="onTopicClick" 
+        data-keyword="{{item.keyword}}"
+      >
+        <view class="topic-rank">{{item.rank}}</view>
+        <view class="topic-content">
+          <text class="topic-title">{{item.keyword}}</text>
+          <text class="topic-platform">{{item.platform}}</text>
+        </view>
+        <view class="topic-hotness">热度: {{item.hotness}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 最近分析 -->
+  <view class="recent-reports-section">
+    <view class="section-header">
+      <text class="section-title">最近分析</text>
+      <text class="more-link" bindtap="viewAllReports">查看全部</text>
+    </view>
+    <view class="reports-list">
+      <view 
+        class="report-item" 
+        wx:for="{{recentReports}}" 
+        wx:key="id"
+        bindtap="viewReport" 
+        data-id="{{item.id}}"
+      >
+        <view class="report-title">{{item.title}}</view>
+        <view class="report-meta">
+          <text class="report-keyword">关键词: {{item.keyword}}</text>
+          <text class="report-time">{{item.created_at}}</text>
+        </view>
+        <view class="report-status">
+          <text 
+            class="status-tag" 
+            wx:if="{{item.status === 'completed'}}"
+            style="background-color: #67c23a;"
+          >
+            已完成
+          </text>
+          <text 
+            class="status-tag" 
+            wx:elif="{{item.status === 'running'}}"
+            style="background-color: #e6a23c;"
+          >
+            运行中
+          </text>
+          <text 
+            class="status-tag" 
+            wx:else
+            style="background-color: #909399;"
+          >
+            {{item.status === 'pending' ? '待处理' : '失败'}}
+          </text>
+        </view>
+      </view>
+      <view class="empty-state" wx:if="{{recentReports.length === 0}}">
+        <text>暂无分析记录</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部导航 -->
+  <view class="bottom-nav">
+    <view class="nav-item" bindtap="navigateToAnalysis">
+      <text class="nav-icon">🔍</text>
+      <text class="nav-text">舆情分析</text>
+    </view>
+    <view class="nav-item" bindtap="navigateToReports">
+      <text class="nav-icon">📊</text>
+      <text class="nav-text">报告管理</text>
+    </view>
+    <view class="nav-item" bindtap="navigateToProfile">
+      <text class="nav-icon">👤</text>
+      <text class="nav-text">个人中心</text>
+    </view>
+  </view>
+</view>

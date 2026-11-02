@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 环境/密钥（本地部署配置，不入库）
+.env
+
+# BettaFish 运行产物
+bettafish-main/logs/
+bettafish-main/final_reports/
+bettafish-main/*_streamlit_reports/
+bettafish-main/db_data/
+bettafish-main/m1_final_report.pdf
+
+# 前端
+node_modules/
+web/dist/
+web/.vscode/
+
+# 小程序构建产物
+wxapp/node_modules/
+
+# 本地备份（旧版本基座，不入库）
+bettafish-v1.0.0.bak/
+
+# IDE / 系统
+.DS_Store
+Thumbs.db
