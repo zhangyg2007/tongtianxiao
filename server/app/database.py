@@ -11,6 +11,7 @@ def get_engine():
     global _engine
     if _engine is None:
         _engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+        SessionLocal.configure(bind=_engine)
     return _engine
 
 
@@ -28,7 +29,8 @@ class Base(DeclarativeBase):
 
 
 def get_db():
-    db = SessionLocal(bind=get_engine())
+    get_engine()  # 确保 SessionLocal 已绑定引擎
+    db = SessionLocal()
     try:
         yield db
     finally:

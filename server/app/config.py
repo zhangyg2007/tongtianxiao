@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
     bettafish_base_url: str = "http://localhost:5000"
+    # 任务管线轮询参数（秒）：引擎产出等待上限 / 报告生成等待上限 / 轮询间隔
+    engine_wait_max: int = 7200
+    report_wait_max: int = 7200
+    poll_interval: int = 60
 
 
 @lru_cache
