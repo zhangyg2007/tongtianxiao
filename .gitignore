@@ -23,6 +23,9 @@ web/.vscode/
 # 小程序构建产物
 wxapp/node_modules/
 
+# 业务层本地数据库（开发/测试）
+server/*.db
+
 # 本地备份（旧版本基座，不入库）
 bettafish-v1.0.0.bak/
 
