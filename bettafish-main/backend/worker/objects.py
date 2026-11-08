@@ -115,3 +115,35 @@ def get_artifact(artifact_id: str) -> dict | None:
             "SELECT * FROM core.artifact WHERE artifact_id = %s", (artifact_id,)
         )
         return cur.fetchone()
+
+
+def register_artifact(
+    task_id: str,
+    artifact_type: str,
+    title: str | None = None,
+    object_id: int | None = None,
+    template_code: str | None = None,
+    storage_path: str | None = None,
+    mime_type: str | None = None,
+) -> str:
+    """登记一条产物记录，返回 artifact_id 字符串。"""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO core.artifact
+                (task_id, object_id, artifact_type, template_code,
+                 storage_path, mime_type, title)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING artifact_id
+            """,
+            (
+                task_id,
+                object_id,
+                artifact_type,
+                template_code,
+                storage_path,
+                mime_type,
+                title,
+            ),
+        )
+        return str(cur.fetchone()[0])

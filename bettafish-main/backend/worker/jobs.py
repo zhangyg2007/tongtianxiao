@@ -105,19 +105,100 @@ def execute_task(task_id: str) -> dict:
 
 @register("demo_pipeline")
 def demo_pipeline(ctx: TaskContext, input: dict) -> dict:
-    """三步演示：模拟抓取 → 解析 → 生成，每步 sleep 可配。"""
+    """四步演示：模拟抓取 → 解析 → 写样例证据 → 生成产物。
+
+    任务挂了 object_id 时写入 3 条样例证据 + 1 条产物记录，
+    供前端对象详情页 / 证据抽屉在服务器上全链路验证
+    （P0 验收：报告结论 30 秒内看到原文出处）。
+    """
     wait = float(input.get("step_seconds", 2))
+    task = store.get_task(ctx.task_id)
+    object_id = (task or {}).get("object_id")
+
     with ctx.step("fetch_data"):
         ctx.set_stage("抓取数据", 10)
         time.sleep(wait)
     with ctx.step("parse_data"):
-        ctx.set_stage("解析数据", 50)
+        ctx.set_stage("解析数据", 40)
         time.sleep(wait)
+
+    evidence_ids: list[int] = []
+    artifact_id = None
+    with ctx.step("save_evidence"):
+        ctx.set_stage("写入证据", 60)
+        if object_id:
+            from datetime import datetime, timezone
+
+            from . import evidence as evidence_store
+            from .objects import get_object, register_artifact
+
+            obj = get_object(object_id)
+            name = obj["display_name"] if obj else f"对象{object_id}"
+            samples = [
+                dict(
+                    fact=f"{name}于 2024-03-12 因发布违法广告被上海市市场监督管理局罚款 200 万元",
+                    fact_type="penalty",
+                    source_type="gsxt",
+                    source_name="国家企业信用信息公示系统",
+                    source_url="https://example.gov.cn/penalty/2024-0312-001",
+                    quote="……责令当事人停止发布违法广告，罚款人民币贰佰万元整……",
+                    value_json={"amount": 2000000, "currency": "CNY", "date": "2024-03-12"},
+                    published_at=datetime(2024, 3, 12, tzinfo=timezone.utc),
+                    confidence=95,
+                    confidence_reason="政府监管直采",
+                ),
+                dict(
+                    fact=f"2024-06-20 {name}作为被告的买卖合同纠纷案在上海市浦东新区人民法院开庭",
+                    fact_type="litigation",
+                    source_type="court",
+                    source_name="人民法院公告网",
+                    source_url="https://example.court.gov.cn/case/2024-0620-776",
+                    quote="本院定于2024年6月20日9时在第五法庭公开审理原告某贸易公司诉被告"
+                          f"{name}买卖合同纠纷一案。",
+                    published_at=datetime(2024, 6, 20, tzinfo=timezone.utc),
+                    confidence=95,
+                    confidence_reason="法院公告直采",
+                ),
+                dict(
+                    fact=f"{name}注册资本于 2024-01-15 由 1000 万元增至 5000 万元",
+                    fact_type="registration",
+                    source_type="tianyancha",
+                    source_name="天眼查",
+                    source_url="https://example.tianyancha.com/company/000123",
+                    quote="注册资本：5000 万元人民币（2024-01-15 由 1000 万元变更）",
+                    value_json={"capital_before": 10000000, "capital_after": 50000000,
+                                "currency": "CNY"},
+                    published_at=datetime(2024, 1, 15, tzinfo=timezone.utc),
+                    confidence=85,
+                    confidence_reason="商业 API，与官方源交叉一致",
+                ),
+            ]
+            for s in samples:
+                evidence_ids.append(
+                    evidence_store.insert_evidence(
+                        object_id=object_id, task_id=ctx.task_id, **s
+                    )
+                )
+            artifact_id = register_artifact(
+                task_id=ctx.task_id,
+                object_id=object_id,
+                artifact_type="report_md",
+                template_code="demo_v1",
+                title=f"{name} 背调报告（demo）",
+            )
+        time.sleep(wait)
+
     with ctx.step("generate_report"):
         ctx.set_stage("生成报告", 90)
         time.sleep(wait)
     ctx.set_stage("完成", 100)
-    return {"demo": True, "steps": 3, "echo": input}
+    return {
+        "demo": True,
+        "steps": 4,
+        "evidence_ids": evidence_ids,
+        "artifact_id": artifact_id,
+        "echo": input,
+    }
 
 
 # ====== 引擎接入：InsightEngine 深度研究（去 Streamlit 执行体） ======

@@ -18,6 +18,8 @@
     GET  /objects/<object_id>        对象详情（含最近任务）
     GET  /artifacts                  产物列表
     GET  /artifacts/<artifact_id>    产物详情
+    GET  /evidence                   证据列表（对象/任务过滤）
+    GET  /evidence/<evidence_id>     证据详情（原文出处）
 """
 
 import json
@@ -28,7 +30,7 @@ from datetime import date, datetime
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 from loguru import logger
 
-from backend.worker import enqueue, objects, store
+from backend.worker import enqueue, evidence, objects, store
 
 api_v1_bp = Blueprint("api_v1", __name__)
 
@@ -243,3 +245,28 @@ def get_artifact(artifact_id: str):
     if row is None:
         return _err("产物不存在", 404)
     return _ok({"artifact": row})
+
+
+# ====== 证据 ======
+
+@api_v1_bp.get("/evidence")
+def list_evidence():
+    rows = evidence.list_evidence(
+        object_id=(
+            int(request.args["object_id"])
+            if request.args.get("object_id", "").isdigit()
+            else None
+        ),
+        task_id=request.args.get("task_id") or None,
+        fact_type=request.args.get("fact_type") or None,
+        limit=int(request.args.get("limit", 100)),
+    )
+    return _ok({"evidence": rows, "count": len(rows)})
+
+
+@api_v1_bp.get("/evidence/<int:evidence_id>")
+def get_evidence(evidence_id: int):
+    row = evidence.get_evidence(evidence_id)
+    if row is None:
+        return _err("证据不存在", 404)
+    return _ok({"evidence": row})

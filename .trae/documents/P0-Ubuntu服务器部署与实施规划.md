@@ -99,10 +99,10 @@ pip install flask rq "redis>=4.6" psycopg2-binary asyncpg loguru pydantic
 
 | 进程 | 启动方式 | 说明 |
 |---|---|---|
-| Flask 主应用 | `python app.py` | 遗留入口，后续挂 /api/v1 Blueprint |
+| Flask 主应用 | `python app.py` | 已挂 /api/v1 Blueprint（任务/对象/产物/证据 + SSE） |
 | RQ worker | `cd bettafish-main && ../.venv/bin/python -m backend.worker.worker` | dd/pr 双队列；每个 job 执行期间 15s 一次心跳写 `core.task.heartbeat_at` |
 | 僵死扫描调度器 | `cd bettafish-main && ../.venv/bin/python -m backend.worker.scheduler` | APScheduler，每 60s 扫描 running 且心跳超 2min 的任务置 failed |
-| 前端 dev server | `npm run dev`（web/ 目录） | Vite，代理 API 到 Flask |
+| 前端 dev server | `cd frontend && npm install && npm run dev` | Vite（React18+TS+AntD5），/api 代理到 Flask 5000 |
 
 **队列链路自检（worker + scheduler 起来后，另开终端）**：
 
@@ -111,16 +111,22 @@ cd bettafish-main && ../.venv/bin/python -c "
 from backend.worker.enqueue import submit_task
 tid = submit_task('dd', 'demo_pipeline', requested_by=1, input={'step_seconds': 1})
 print('submitted:', tid)"
-# 预期：worker 日志显示三步执行；随后查库：
+# 预期：worker 日志显示四步执行；随后查库：
 psql -d bettafish -c "SELECT task_id, status, progress, stage FROM core.task ORDER BY created_at DESC LIMIT 1;"
 # 预期：status=succeeded, progress=100, stage=完成
 psql -d bettafish -c "SELECT seq, name, status, duration_ms FROM core.task_step ORDER BY seq;"
-# 预期：3 行 succeeded（fetch_data / parse_data / generate_report）
+# 预期：4 行 succeeded（fetch_data / parse_data / save_evidence / generate_report）
 ```
+
+**前端全链路自检（P0 验收入口）**：起 Flask + worker + `cd frontend && npm run dev` 后，
+浏览器开 `http://<服务器IP>:5173`：
+1. 注册对象（如「某某科技有限公司」，natural_key 填统一社会信用代码）；
+2. 在对象行点「发起任务」→ demo_pipeline → 提交，跳转任务详情页看 SSE 步骤流与进度条；
+3. 任务完成后进对象详情页「证据」Tab——点击任一证据，30 秒内应看到原文片段（quote）+「打开原文出处」链接（demo_pipeline 已写入 3 条样例证据 + 1 条产物记录）。
 
 systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参数。
 
-端口规划：Flask 8080（沿用）、Vite dev 5173、PG 5432（仅本机）、Redis 6379（仅本机）。PG/Redis 只监听 localhost，不做对外暴露。
+端口规划：Flask 5000（config.py 默认，/api 代理目标）、Vite dev 5173、PG 5432（仅本机）、Redis 6379（仅本机）。PG/Redis 只监听 localhost，不做对外暴露。
 
 ---
 
@@ -132,15 +138,17 @@ systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参
 - ✅ `bettafish-main/backend/scripts/`（install_env / init_db / setup_venv 三个一键脚本）
 - ✅ `bettafish-main/backend/worker/`（RQ 骨架：dd/pr 双队列、job 执行期间 15s 心跳、APScheduler 60s 僵死扫描、demo_pipeline 自检处理器、submit_task/cancel_task 辅助函数）
 - ✅ ReportEngine 去单例改造：`current_task` 全局单例已删除，任务状态/事件迁 Redis（`ReportEngine/task_store.py`：Hash + Stream，TTL 7 天），`/generate` 改入 RQ 'pr' 队列由 worker 执行（`ReportEngine/tasks.py`），SSE 改 XREAD BLOCK 消费，支持多任务并发；worker venv 依赖已补 ReportEngine 运行包（setup_venv.sh），install_env.sh 补 weasyprint 系统库
+- ✅ InsightEngine 执行体抽离 Streamlit（`InsightEngine/runner.py`：run_research 纯执行体 + on_progress 结构化事件 + should_stop 段落边界取消），注册为 `insight_research` 处理器（延迟导入重依赖）
+- ✅ `/api/v1` 统一接口（`backend/api/v1.py`：任务 CRUD/取消、SSE 结构化进度 task/step/end、对象注册/搜索、产物与证据查询）+ `backend/worker/objects.py` / `evidence.py`（object 幂等注册、artifact 登记、evidence content_hash 幂等写入）
+- ✅ React 前端（`bettafish-main/frontend/`：Vite + React18 + TS + AntD5；案卷列表、任务列表、任务详情 SSE 实时步骤、对象详情、证据抽屉）；demo_pipeline 扩为四步并写入 3 条样例证据 + 1 条产物记录，供前端全链路验证
 
 **服务器就位后（顺序执行）**：
 1. 执行 §2 安装 + §3 初始化验证（预计半天内）
 2. 按 §4 启动 worker + scheduler，跑「队列链路自检」验证 RQ 骨架
 3. 验证 ReportEngine 链路：起 Flask 主应用 + worker 后，从旧 UI 发起报告生成，确认 SSE 进度正常、任务状态落 Redis
-4. InsightEngine 执行体抽离 Streamlit（runner + on_progress 回调）
-5. SSE 结构化进度 + `/api/v1/tasks` /objects /artifacts
-6. React 前端（案卷列表/详情/证据抽屉）
-7. 投资尽调模板（12 章）+ 证据后校验
+4. 验证 InsightEngine 链路：`/api/v1/tasks` 提交 insight_research（pr），确认任务详情页 SSE 段落进度正常
+5. 前端全链路自检（§4「前端全链路自检」）——P0 验收入口
+6. 投资尽调模板（12 章）+ 证据后校验（编码中）
 
 **P0 验收标准（不变，见设计文档 §6.1）**：业务方拿到一份报告，随机挑 5 个结论，每一个都能在 30 秒内点开看到原文出处。
 
