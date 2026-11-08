@@ -27,7 +27,8 @@ except locale.Error:
 # 添加src目录到Python路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from InsightEngine import DeepSearchAgent, Settings
+from InsightEngine import Settings
+from InsightEngine.runner import run_research
 from config import settings
 from utils.github_issues import error_with_issue_link
 
@@ -131,55 +132,27 @@ def main():
 
 
 def execute_research(query: str, config: Settings):
-    """执行研究"""
+    """执行研究（编排逻辑在 InsightEngine.runner，此处只做进度渲染）"""
     try:
         # 创建进度条
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        # 初始化Agent
-        status_text.text("正在初始化Agent...")
-        agent = DeepSearchAgent(config)
-        st.session_state.agent = agent
+        def on_progress(event):
+            """把 runner 的结构化进度事件映射到 Streamlit 控件。"""
+            message = event.get("message")
+            if message:
+                status_text.text(message)
+            progress = event.get("progress")
+            if progress is not None:
+                progress_bar.progress(min(100, int(progress)))
 
-        progress_bar.progress(10)
-
-        # 生成报告结构
-        status_text.text("正在生成报告结构...")
-        agent._generate_report_structure(query)
-        progress_bar.progress(20)
-
-        # 处理段落
-        total_paragraphs = len(agent.state.paragraphs)
-        for i in range(total_paragraphs):
-            status_text.text(f"正在处理段落 {i + 1}/{total_paragraphs}: {agent.state.paragraphs[i].title}")
-
-            # 初始搜索和总结
-            agent._initial_search_and_summary(i)
-            progress_value = 20 + (i + 0.5) / total_paragraphs * 60
-            progress_bar.progress(int(progress_value))
-
-            # 反思循环
-            agent._reflection_loop(i)
-            agent.state.paragraphs[i].research.mark_completed()
-
-            progress_value = 20 + (i + 1) / total_paragraphs * 60
-            progress_bar.progress(int(progress_value))
-
-        # 生成最终报告
-        status_text.text("正在生成最终报告...")
-        final_report = agent._generate_final_report()
-        progress_bar.progress(90)
-
-        # 保存报告
-        status_text.text("正在保存报告...")
-        agent._save_report(final_report)
-        progress_bar.progress(100)
-
-        status_text.text("研究完成！")
+        # 执行研究（纯执行体，无 UI 依赖）
+        result = run_research(query, config=config, on_progress=on_progress)
+        st.session_state.agent_result = result
 
         # 显示结果
-        display_results(agent, final_report)
+        display_results(result)
 
     except Exception as e:
         import traceback
@@ -193,43 +166,42 @@ def execute_research(query: str, config: Settings):
         logger.exception(f"研究过程中发生错误: {str(e)}")
 
 
-def display_results(agent: DeepSearchAgent, final_report: str):
-    """显示研究结果"""
+def display_results(result: dict):
+    """显示研究结果（消费 runner 返回的结果 dict）"""
     st.header("工作结束")
 
     # 结果标签页（已移除下载选项）
     tab1, tab2 = st.tabs(["研究小结", "引用信息"])
 
     with tab1:
-        st.markdown(final_report)
+        st.markdown(result["report"])
 
     with tab2:
         # 段落详情
         st.subheader("段落详情")
-        for i, paragraph in enumerate(agent.state.paragraphs):
-            with st.expander(f"段落 {i + 1}: {paragraph.title}"):
-                st.write("**预期内容:**", paragraph.content)
-                st.write("**最终内容:**", paragraph.research.latest_summary[:300] + "..."
-                if len(paragraph.research.latest_summary) > 300
-                else paragraph.research.latest_summary)
-                st.write("**搜索次数:**", paragraph.research.get_search_count())
-                st.write("**反思次数:**", paragraph.research.reflection_iteration)
+        for paragraph in result["paragraphs"]:
+            with st.expander(f"段落 {paragraph['index'] + 1}: {paragraph['title']}"):
+                st.write("**预期内容:**", paragraph["content"])
+                summary = paragraph["latest_summary"]
+                st.write("**最终内容:**",
+                         summary[:300] + "..." if len(summary) > 300 else summary)
+                st.write("**搜索次数:**", paragraph["search_count"])
+                st.write("**反思次数:**", paragraph["reflection_iteration"])
 
         # 搜索历史
         st.subheader("搜索历史")
-        all_searches = []
-        for paragraph in agent.state.paragraphs:
-            all_searches.extend(paragraph.research.search_history)
+        all_searches = result["search_history"]
 
         if all_searches:
             for i, search in enumerate(all_searches):
-                with st.expander(f"搜索 {i + 1}: {search.query}"):
-                    st.write("**URL:**", search.url)
-                    st.write("**标题:**", search.title)
+                with st.expander(f"搜索 {i + 1}: {search['query']}"):
+                    st.write("**URL:**", search["url"])
+                    st.write("**标题:**", search["title"])
+                    content = search["content"]
                     st.write("**内容预览:**",
-                             search.content[:200] + "..." if len(search.content) > 200 else search.content)
-                    if search.score:
-                        st.write("**相关度评分:**", search.score)
+                             content[:200] + "..." if len(content) > 200 else content)
+                    if search.get("score"):
+                        st.write("**相关度评分:**", search["score"])
 
 
 if __name__ == "__main__":

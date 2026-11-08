@@ -19,6 +19,10 @@ from . import store
 HANDLERS: dict[str, "callable"] = {}
 
 
+class TaskCanceled(Exception):
+    """处理器主动取消（用户取消）。execute_task 据此落 canceled 而非 failed。"""
+
+
 def register(task_type: str):
     def deco(fn):
         HANDLERS[task_type] = fn
@@ -84,6 +88,10 @@ def execute_task(task_id: str) -> dict:
     logger.info(f"[task {task_id}] 开始执行 {task_type}")
     try:
         result = handler(ctx, input_dict)
+    except TaskCanceled as e:
+        logger.info(f"[task {task_id}] {task_type} 已取消: {e}")
+        store.mark_canceled(task_id)
+        return {"ok": False, "reason": "canceled"}
     except Exception as e:
         logger.exception(f"[task {task_id}] {task_type} 执行失败")
         store.mark_failed(task_id, "handler_error", str(e))
@@ -110,3 +118,82 @@ def demo_pipeline(ctx: TaskContext, input: dict) -> dict:
         time.sleep(wait)
     ctx.set_stage("完成", 100)
     return {"demo": True, "steps": 3, "echo": input}
+
+
+# ====== 引擎接入：InsightEngine 深度研究（去 Streamlit 执行体） ======
+
+@register("insight_research")
+def insight_research(ctx: TaskContext, input: dict) -> dict:
+    """舆情洞察深度研究。
+
+    延迟导入 InsightEngine（sentence_transformers 等重依赖只在
+    该类型任务真正执行时加载，不影响 worker 启动速度与其他任务）。
+    input: {"query": str, "max_reflections"?: int, "output_dir"?: str}
+    """
+    from InsightEngine.runner import ResearchCanceled, run_research
+    from InsightEngine.utils.config import Settings
+
+    query = (input or {}).get("query", "").strip()
+    if not query:
+        raise ValueError("input.query 不能为空")
+
+    overrides = {}
+    if input.get("output_dir"):
+        overrides["OUTPUT_DIR"] = input["output_dir"]
+    if input.get("max_reflections"):
+        overrides["MAX_REFLECTIONS"] = int(input["max_reflections"])
+    config = Settings(**overrides) if overrides else None
+
+    # 当前段落步骤的上下文管理器句柄（paragraph_start 进入 / paragraph_done 退出）
+    current_step = None
+
+    def _close_step():
+        nonlocal current_step
+        if current_step is not None:
+            current_step.__exit__(None, None, None)
+            current_step = None
+
+    def on_progress(event: dict) -> None:
+        etype = event.get("type")
+        if etype == "paragraph_start":
+            _close_step()
+            current_step = ctx.step(
+                f"段落{event['index'] + 1}/{event['total']}: {event['title']}",
+                {"title": event["title"]},
+            ).__enter__()
+            ctx.set_stage(event.get("message", ""), event.get("progress"))
+        elif etype == "paragraph_done":
+            _close_step()
+            ctx.set_progress(event.get("progress", 0))
+        elif etype == "complete":
+            _close_step()
+            ctx.set_stage("完成", 100)
+        else:
+            message = event.get("message")
+            if message:
+                ctx.set_stage(message, event.get("progress"))
+
+    def should_stop() -> bool:
+        """段落边界检查 core.task 是否已被取消。"""
+        try:
+            task = store.get_task(ctx.task_id)
+            return task is not None and task["status"] == "canceled"
+        except Exception:
+            return False
+
+    try:
+        result = run_research(
+            query, config=config, on_progress=on_progress, should_stop=should_stop
+        )
+    except ResearchCanceled as e:
+        _close_step()
+        raise TaskCanceled(str(e))
+    _close_step()
+
+    # 精简结果：search_history 与段落全文不入 core.task.result（PG 侧只留摘要）
+    slim = {k: v for k, v in result.items() if k != "search_history"}
+    slim["paragraphs"] = [
+        {k: v for k, v in p.items() if k != "latest_summary"}
+        for p in result.get("paragraphs", [])
+    ]
+    return slim

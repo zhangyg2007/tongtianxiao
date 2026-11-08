@@ -926,7 +926,11 @@ class DeepSearchAgent:
         return final_report
 
     def _save_report(self, report_content: str):
-        """保存报告到文件"""
+        """保存报告到文件
+
+        Returns:
+            (报告文件路径, 状态文件路径或None)：供 runner 等调用方回传结果
+        """
         # 生成文件名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         query_safe = "".join(
@@ -944,11 +948,14 @@ class DeepSearchAgent:
         logger.info(f"报告已保存到: {filepath}")
 
         # 保存状态（如果配置允许）
+        state_filepath = None
         if self.config.SAVE_INTERMEDIATE_STATES:
             state_filename = f"state_{query_safe}_{timestamp}.json"
             state_filepath = os.path.join(self.config.OUTPUT_DIR, state_filename)
             self.state.save_to_file(state_filepath)
             logger.info(f"状态已保存到: {state_filepath}")
+
+        return filepath, state_filepath
 
     def get_progress_summary(self) -> Dict[str, Any]:
         """获取进度摘要"""
