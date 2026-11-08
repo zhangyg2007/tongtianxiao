@@ -100,8 +100,23 @@ pip install flask rq "redis>=4.6" psycopg2-binary asyncpg loguru pydantic
 | 进程 | 启动方式 | 说明 |
 |---|---|---|
 | Flask 主应用 | `python app.py` | 遗留入口，后续挂 /api/v1 Blueprint |
-| RQ worker | `rq worker dd pr` | dd=背调慢队列，pr=舆情快队列 |
+| RQ worker | `cd bettafish-main && ../.venv/bin/python -m backend.worker.worker` | dd/pr 双队列；每个 job 执行期间 15s 一次心跳写 `core.task.heartbeat_at` |
+| 僵死扫描调度器 | `cd bettafish-main && ../.venv/bin/python -m backend.worker.scheduler` | APScheduler，每 60s 扫描 running 且心跳超 2min 的任务置 failed |
 | 前端 dev server | `npm run dev`（web/ 目录） | Vite，代理 API 到 Flask |
+
+**队列链路自检（worker + scheduler 起来后，另开终端）**：
+
+```bash
+cd bettafish-main && ../.venv/bin/python -c "
+from backend.worker.enqueue import submit_task
+tid = submit_task('dd', 'demo_pipeline', requested_by=1, input={'step_seconds': 1})
+print('submitted:', tid)"
+# 预期：worker 日志显示三步执行；随后查库：
+psql -d bettafish -c "SELECT task_id, status, progress, stage FROM core.task ORDER BY created_at DESC LIMIT 1;"
+# 预期：status=succeeded, progress=100, stage=完成
+psql -d bettafish -c "SELECT seq, name, status, duration_ms FROM core.task_step ORDER BY seq;"
+# 预期：3 行 succeeded（fetch_data / parse_data / generate_report）
+```
 
 systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参数。
 
@@ -115,10 +130,11 @@ systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参
 - ✅ 全部设计文档（本目录 6 份，含本文档）
 - ✅ `bettafish-main/backend/migrations/001_core_schema.sql`（core.* 9 张表，环境无关）
 - ✅ `bettafish-main/backend/scripts/`（install_env / init_db / setup_venv 三个一键脚本）
+- ✅ `bettafish-main/backend/worker/`（RQ 骨架：dd/pr 双队列、job 执行期间 15s 心跳、APScheduler 60s 僵死扫描、demo_pipeline 自检处理器、submit_task/cancel_task 辅助函数）
 
 **服务器就位后（顺序执行）**：
 1. 执行 §2 安装 + §3 初始化验证（预计半天内）
-2. RQ worker 骨架（dd/pr 双队列 + 心跳写 `core.task.heartbeat_at`）
+2. 按 §4 启动 worker + scheduler，跑「队列链路自检」验证 RQ 骨架
 3. ReportEngine 去单例改造（`flask_interface.py:31-32` 全局单例 → Redis task_store）
 4. InsightEngine 执行体抽离 Streamlit（runner + on_progress 回调）
 5. SSE 结构化进度 + `/api/v1/tasks` /objects /artifacts
