@@ -11,6 +11,8 @@ set -euo pipefail
 echo "==> [1/4] 基础工具 + PostgreSQL 16 + Redis 7（apt 公共环境，systemd 托管）"
 sudo apt update
 sudo apt install -y git build-essential postgresql redis-server
+# weasyprint（报告 PDF 导出）运行所需系统库
+sudo apt install -y libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0
 
 echo "==> [2/4] Python 3.11（24.04 自带 3.12，遗留钉死包需要 3.11，走 deadsnakes）"
 sudo apt install -y software-properties-common

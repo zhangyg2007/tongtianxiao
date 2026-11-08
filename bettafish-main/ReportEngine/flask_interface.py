@@ -2,25 +2,27 @@
 Report Engine Flask接口。
 
 该模块为前端/CLI提供统一HTTP/SSE入口，负责：
-1. 初始化 ReportAgent 并串联后台线程；
-2. 管理任务排队、进度查询、流式推送与日志下载；
+1. 初始化 ReportAgent；
+2. 任务经 RQ 队列异步执行（执行体见 ReportEngine/tasks.py），
+   状态与事件持久化在 Redis（task_store），多任务并发不再受限；
 3. 提供模板列表、输入文件检查等周边能力。
+
+去单例改造（设计文档 §3.1）：原 `current_task` 全局单例 + 内存事件队列
+已删除，任务状态统一走 Redis，SSE 改为 XREAD BLOCK 消费事件流。
 """
 
 import os
 import json
-import threading
 import time
-from collections import deque, defaultdict
 from datetime import datetime
 from pathlib import Path
-from queue import Queue, Empty
 from flask import Blueprint, request, jsonify, Response, send_file, stream_with_context
 from typing import Dict, Any, List, Optional
 from loguru import logger
 from .agent import ReportAgent, create_agent
 from .nodes import ChapterJsonParseError
 from .utils.config import settings
+from . import task_store
 
 
 # 创建Blueprint
@@ -28,177 +30,25 @@ report_bp = Blueprint('report_engine', __name__)
 
 # 全局变量
 report_agent = None
-current_task = None
-task_lock = threading.Lock()
 
-# ====== 流式推送与任务历史管理 ======
-# 通过有界deque缓存最近的事件，方便SSE断线后快速补发
-MAX_TASK_HISTORY = 5
-STREAM_HEARTBEAT_INTERVAL = 15  # 心跳间隔秒
+
+def _get_report_agent() -> ReportAgent:
+    """惰性获取/创建 ReportAgent（Flask 启动时初始化，worker 进程内兜底）。"""
+    global report_agent
+    if report_agent is None:
+        report_agent = create_agent()
+        logger.info("Report Engine初始化成功")
+    return report_agent
+
+
+# ====== SSE 常量 ======
+STREAM_HEARTBEAT_INTERVAL = 15  # 心跳间隔秒（XREAD BLOCK 超时）
 STREAM_IDLE_TIMEOUT = 120  # 终态后最长保活时间，避免孤儿SSE阻塞
 STREAM_TERMINAL_STATUSES = {"completed", "error", "cancelled"}
-stream_lock = threading.Lock()
-stream_subscribers = defaultdict(list)
-tasks_registry: Dict[str, 'ReportTask'] = {}
-LOG_STREAM_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-log_stream_handler_id: Optional[int] = None
-
-EXCLUDED_ENGINE_PATH_KEYWORDS = ("ForumEngine", "InsightEngine", "MediaEngine", "QueryEngine")
-
-def _is_excluded_engine_log(record: Dict[str, Any]) -> bool:
-    """
-    判断日志是否来自其他引擎（Insight/Media/Query/Forum），用于过滤混入的日志。
-
-    返回:
-        bool: True 表示应当过滤（即不写入/不转发）。
-    """
-    try:
-        file_path = record["file"].path
-        if any(keyword in file_path for keyword in EXCLUDED_ENGINE_PATH_KEYWORDS):
-            return True
-    except Exception:
-        pass
-
-    # 兜底：尝试按模块名过滤，防止file信息缺失时误混入
-    try:
-        module_name = record.get("module", "")
-        if isinstance(module_name, str):
-            lowered = module_name.lower()
-            return any(keyword.lower() in lowered for keyword in EXCLUDED_ENGINE_PATH_KEYWORDS)
-    except Exception:
-        pass
-
-    return False
-
-
-def _stream_log_to_task(message):
-    """
-    将loguru日志同步到当前任务的SSE事件，保证前端实时可见。
-
-    仅在存在运行中的任务时推送，避免无关日志刷屏。
-    """
-    try:
-        record = message.record
-        level_name = record["level"].name
-        if level_name not in LOG_STREAM_LEVELS:
-            return
-        if _is_excluded_engine_log(record):
-            return
-
-        with task_lock:
-            task = current_task
-
-        if not task or task.status not in ("running", "pending"):
-            return
-
-        timestamp = record["time"].strftime("%H:%M:%S.%f")[:-3]
-        formatted_line = f"[{timestamp}] [{level_name}] {record['message']}"
-        task.publish_event(
-            "log",
-            {
-                "line": formatted_line,
-                "level": level_name.lower(),
-                "timestamp": timestamp,
-                "message": record["message"],
-                "module": record.get("module", ""),
-                "function": record.get("function", ""),
-            },
-        )
-    except Exception:
-        # 避免在日志钩子里产生日志递归
-        pass
-
-
-def _setup_log_stream_forwarder():
-    """为当前进程挂载一次性的loguru钩子，用于SSE实时转发。"""
-    global log_stream_handler_id
-    if log_stream_handler_id is not None:
-        return
-    log_stream_handler_id = logger.add(
-        _stream_log_to_task,
-        level="DEBUG",
-        enqueue=False,
-        catch=True,
-    )
-
-
-def _register_stream(task_id: str) -> Queue:
-    """
-    为指定任务注册一个事件队列，供SSE监听器消费。
-
-    返回的 Queue 会存入 `stream_subscribers`，SSE 生成器将不断读取。
-
-    参数:
-        task_id: 需要监听的任务ID。
-
-    返回:
-        Queue: 线程安全的事件队列。
-    """
-    queue = Queue()
-    with stream_lock:
-        stream_subscribers[task_id].append(queue)
-    return queue
-
-
-def _unregister_stream(task_id: str, queue: Queue):
-    """
-    安全移除事件队列，避免内存泄漏。
-
-    需要在finally中调用，保证异常情况下资源也能释放。
-
-    参数:
-        task_id: 任务ID。
-        queue: 之前注册的事件队列。
-    """
-    with stream_lock:
-        listeners = stream_subscribers.get(task_id, [])
-        if queue in listeners:
-            listeners.remove(queue)
-        if not listeners and task_id in stream_subscribers:
-            stream_subscribers.pop(task_id, None)
-
-
-def _broadcast_event(task_id: str, event: Dict[str, Any]):
-    """
-    将事件推送给所有监听者，失败时做好异常捕获。
-
-    采用浅拷贝监听列表，防止并发移除导致遍历异常。
-
-    参数:
-        task_id: 待推送的任务ID。
-        event: 结构化事件payload。
-    """
-    with stream_lock:
-        listeners = list(stream_subscribers.get(task_id, []))
-    for queue in listeners:
-        try:
-            queue.put(event, timeout=0.1)
-        except Exception:
-            logger.exception("推送流式事件失败，跳过当前监听队列")
-
-
-def _prune_task_history_locked():
-    """
-    在task_lock持有期间调用，清理过多的历史任务。
-
-    仅保留最近 `MAX_TASK_HISTORY` 个任务，避免长时间运行占用过多内存。
-
-    说明:
-        该函数假设调用方已获取 `task_lock`，否则存在竞态风险。
-    """
-    if len(tasks_registry) <= MAX_TASK_HISTORY:
-        return
-    # 按创建时间排序，移除最旧的任务
-    sorted_tasks = sorted(tasks_registry.values(), key=lambda t: t.created_at)
-    for task in sorted_tasks[:-MAX_TASK_HISTORY]:
-        tasks_registry.pop(task.task_id, None)
-
 
 def _get_task(task_id: str) -> Optional['ReportTask']:
     """
-    统一的任务查找方法，优先返回当前任务。
-
-    避免重复写锁逻辑，便于多个API共享。
+    统一的任务查找方法：从 Redis task_store 读取。
 
     参数:
         task_id: 任务ID。
@@ -206,10 +56,21 @@ def _get_task(task_id: str) -> Optional['ReportTask']:
     返回:
         ReportTask | None: 命中时返回任务实例，否则为None。
     """
-    with task_lock:
-        if current_task and current_task.task_id == task_id:
-            return current_task
-        return tasks_registry.get(task_id)
+    return ReportTask.from_redis(task_id)
+
+
+def _latest_task() -> Optional['ReportTask']:
+    """最近创建的一个任务（供 /status 展示）。"""
+    ids = task_store.latest_task_ids(1)
+    return ReportTask.from_redis(ids[0]) if ids else None
+
+
+def _as_int(value, default: int = 0) -> int:
+    """把 Redis 读出的字符串安全转成 int。"""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _format_sse(event: Dict[str, Any]) -> str:
@@ -256,7 +117,6 @@ def initialize_report_engine():
     try:
         report_agent = create_agent()
         logger.info("Report Engine初始化成功")
-        _setup_log_stream_forwarder()
 
         # 检测 PDF 生成依赖（Pango）
         try:
@@ -273,135 +133,143 @@ def initialize_report_engine():
 
 class ReportTask:
     """
-    报告生成任务。
+    报告生成任务（Redis 持久化，见 task_store）。
 
-    该对象串联运行状态、进度、事件历史及最终文件路径，
-    既供后台线程更新，也供HTTP接口读取。
+    写侧（worker 进程）通过属性赋值 / update_status 写穿到 Redis；
+    读侧（Flask 路由）每次属性访问都取 Redis 最新值。
+    事件通过 Redis Stream 追加，事件 id 即 Stream 条目 id。
     """
 
-    def __init__(self, query: str, task_id: str, custom_template: str = ""):
+    # 落 Redis Hash 的字段（created_at/updated_at 存 isoformat 字符串）
+    _FIELDS = (
+        'query', 'custom_template', 'status', 'progress', 'error_message',
+        'html_content',
+        'report_file_path', 'report_file_relative_path', 'report_file_name',
+        'state_file_path', 'state_file_relative_path',
+        'ir_file_path', 'ir_file_relative_path',
+        'markdown_file_path', 'markdown_file_relative_path', 'markdown_file_name',
+        'created_at', 'updated_at',
+    )
+
+    def __init__(self, task_id: str, query: str = '', custom_template: str = ''):
         """
-        初始化任务对象，记录查询词、自定义模板与运行期元数据。
+        绑定任务；Redis 中不存在该任务时创建初始记录。
 
         Args:
+            task_id: 任务唯一ID
             query: 最终需要生成的报告主题
-            task_id: 任务唯一ID，通常由时间戳构造
             custom_template: 可选的自定义Markdown模板
         """
         self.task_id = task_id
-        self.query = query
-        self.custom_template = custom_template
-        self.status = "pending"  # 四种状态（pending/running/completed/error）
-        self.progress = 0
-        self.result = None
-        self.error_message = ""
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
-        self.html_content = ""
-        self.report_file_path = ""
-        self.report_file_relative_path = ""
-        self.report_file_name = ""
-        self.state_file_path = ""
-        self.state_file_relative_path = ""
-        self.ir_file_path = ""
-        self.ir_file_relative_path = ""
-        self.markdown_file_path = ""
-        self.markdown_file_relative_path = ""
-        self.markdown_file_name = ""
-        # ====== 流式事件缓存与并发保护 ======
-        # 使用deque保存最近的事件，结合锁保证多线程下的安全访问
-        self.event_history: deque = deque(maxlen=1000)
-        self._event_lock = threading.Lock()
-        self.last_event_id = 0
+        if not task_store.exists(task_id):
+            now = datetime.now().isoformat()
+            task_store.create_task(task_id, {
+                'query': query,
+                'custom_template': custom_template,
+                'status': 'pending',
+                'progress': 0,
+                'error_message': '',
+                'created_at': now,
+                'updated_at': now,
+            })
+
+    @classmethod
+    def from_redis(cls, task_id: str) -> Optional['ReportTask']:
+        """从 Redis 构建；任务不存在返回 None。"""
+        if not task_store.exists(task_id):
+            return None
+        return cls(task_id)
+
+    def __getattr__(self, name: str):
+        # 仅常规属性未命中时才会进入这里；读一律取 Redis 最新值
+        if name.startswith('_') or name not in ReportTask._FIELDS:
+            raise AttributeError(name)
+        fields = task_store.get_fields(object.__getattribute__(self, 'task_id')) or {}
+        return fields.get(name, '')
+
+    def __setattr__(self, name: str, value):
+        if name.startswith('_') or name == 'task_id':
+            object.__setattr__(self, name, value)
+            return
+        if name in ReportTask._FIELDS:
+            task_store.set_fields(object.__getattribute__(self, 'task_id'),
+                                  {name: str(value)})
+            return
+        object.__setattr__(self, name, value)
 
     def update_status(self, status: str, progress: int = None, error_message: str = ""):
         """
         更新任务状态并广播事件。
-
-        会自动刷新 `updated_at`、错误信息，并触发 `status` 类型的 SSE。
 
         参数:
             status: 任务阶段（pending/running/completed/error/cancelled）。
             progress: 可选的进度百分比。
             error_message: 出错时的人类可读说明。
         """
-        self.status = status
+        mapping = {'status': status, 'updated_at': datetime.now().isoformat()}
         if progress is not None:
-            self.progress = progress
+            mapping['progress'] = progress
         if error_message:
-            self.error_message = error_message
-        self.updated_at = datetime.now()
+            mapping['error_message'] = error_message
+        task_store.set_fields(self.task_id, mapping)
         # 推送状态变更事件，方便前端实时刷新
+        info = self.to_dict()
         self.publish_event(
             'status',
             {
-                'status': self.status,
-                'progress': self.progress,
-                'error_message': self.error_message,
+                'status': status,
+                'progress': info['progress'],
+                'error_message': info['error_message'],
                 'hint': error_message or '',
-                'task': self.to_dict(),
+                'task': info,
             }
         )
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式，方便直接返回给JSON API。"""
+        f = task_store.get_fields(self.task_id) or {}
         return {
             'task_id': self.task_id,
-            'query': self.query,
-            'status': self.status,
-            'progress': self.progress,
-            'error_message': self.error_message,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
-            'has_result': bool(self.html_content),
-            'report_file_ready': bool(self.report_file_path),
-            'report_file_name': self.report_file_name,
-            'report_file_path': self.report_file_relative_path or self.report_file_path,
-            'state_file_ready': bool(self.state_file_path),
-            'state_file_path': self.state_file_relative_path or self.state_file_path,
-            'ir_file_ready': bool(self.ir_file_path),
-            'ir_file_path': self.ir_file_relative_path or self.ir_file_path,
-            'markdown_file_ready': bool(self.markdown_file_path),
-            'markdown_file_name': self.markdown_file_name,
-            'markdown_file_path': self.markdown_file_relative_path or self.markdown_file_path
+            'query': f.get('query', ''),
+            'status': f.get('status', 'pending'),
+            'progress': _as_int(f.get('progress', 0)),
+            'error_message': f.get('error_message', ''),
+            'created_at': f.get('created_at', ''),
+            'updated_at': f.get('updated_at', ''),
+            'has_result': bool(f.get('html_content')),
+            'report_file_ready': bool(f.get('report_file_path')),
+            'report_file_name': f.get('report_file_name', ''),
+            'report_file_path': f.get('report_file_relative_path') or f.get('report_file_path', ''),
+            'state_file_ready': bool(f.get('state_file_path')),
+            'state_file_path': f.get('state_file_relative_path') or f.get('state_file_path', ''),
+            'ir_file_ready': bool(f.get('ir_file_path')),
+            'ir_file_path': f.get('ir_file_relative_path') or f.get('ir_file_path', ''),
+            'markdown_file_ready': bool(f.get('markdown_file_path')),
+            'markdown_file_name': f.get('markdown_file_name', ''),
+            'markdown_file_path': f.get('markdown_file_relative_path') or f.get('markdown_file_path', ''),
         }
 
     def publish_event(self, event_type: str, payload: Dict[str, Any]) -> None:
         """
-        将任意事件放入缓存并广播，所有新增逻辑均配套中文说明。
+        将事件追加到 Redis Stream（SSE 消费方按 Last-Event-ID 续读）。
 
         参数:
             event_type: SSE中的event名称。
             payload: 实际业务数据。
         """
-        timestamp = datetime.utcnow().isoformat() + 'Z'
-        event: Dict[str, Any] = {
-            'id': 0,
-            'type': event_type,
-            'task_id': self.task_id,
-            'timestamp': timestamp,
-            'payload': payload,
-        }
-        with self._event_lock:
-            self.last_event_id += 1
-            event['id'] = self.last_event_id
-            self.event_history.append(event)
-        _broadcast_event(self.task_id, event)
+        task_store.publish_event(self.task_id, event_type, payload)
 
-    def history_since(self, last_event_id: Optional[int]) -> List[Dict[str, Any]]:
+    def history_since(self, last_event_id: Optional[str]) -> List[Dict[str, Any]]:
         """
         根据Last-Event-ID补发历史事件，确保断线重连无遗漏。
 
         参数:
-            last_event_id: SSE客户端记录的最后一个事件ID。
+            last_event_id: SSE客户端记录的最后一个事件ID（Stream 条目 id）。
 
         返回:
             list[dict]: 从 last_event_id 之后的事件列表。
         """
-        with self._event_lock:
-            if last_event_id is None:
-                return list(self.event_history)
-            return [evt for evt in self.event_history if evt['id'] > last_event_id]
+        return task_store.read_events(self.task_id, after_id=last_event_id)
 
 
 def check_engines_ready() -> Dict[str, Any]:
@@ -419,13 +287,15 @@ def check_engines_ready() -> Dict[str, Any]:
 
     forum_log_path = 'logs/forum.log'
 
-    if not report_agent:
+    try:
+        agent = _get_report_agent()
+    except Exception as e:
         return {
             'ready': False,
-            'error': 'Report Engine未初始化'
+            'error': f'Report Engine初始化失败: {e}'
         }
 
-    return report_agent.check_input_files(
+    return agent.check_input_files(
         directories['insight'],
         directories['media'],
         directories['query'],
@@ -435,18 +305,16 @@ def check_engines_ready() -> Dict[str, Any]:
 
 def run_report_generation(task: ReportTask, query: str, custom_template: str = ""):
     """
-    在后台线程中运行报告生成。
+    在 worker 进程中运行报告生成。
 
     包括：检查输入→加载文档→调用ReportAgent→持久化输出→
     推送阶段性事件。出现错误会自动推送并写状态。
 
     参数:
-        task: 本次任务对象，内部持有事件队列。
+        task: 本次任务对象（状态持久化在 Redis）。
         query: 报告主题。
         custom_template: 可选的自定义模板字符串。
     """
-    global current_task
-
     try:
         # 在局部闭包内封装推送逻辑，便于传递给ReportAgent
         def stream_handler(event_type: str, payload: Dict[str, Any]):
@@ -465,6 +333,10 @@ def run_report_generation(task: ReportTask, query: str, custom_template: str = "
             task.update_status("error", 0, f"输入文件未准备就绪: {check_result.get('missing_files', [])}")
             return
 
+        if task.status == 'cancelled':
+            logger.info(f"[task {task.task_id}] 任务已取消，停止执行")
+            return
+
         task.publish_event('stage', {
             'message': '输入文件检查通过，准备载入内容',
             'stage': 'io_ready',
@@ -472,7 +344,8 @@ def run_report_generation(task: ReportTask, query: str, custom_template: str = "
         })
 
         # 加载输入文件
-        content = report_agent.load_input_files(check_result['latest_files'])
+        agent = _get_report_agent()
+        content = agent.load_input_files(check_result['latest_files'])
         task.publish_event('stage', {'message': '源数据加载完成，启动生成流程', 'stage': 'data_loaded'})
 
         # 生成报告（附带兜底重试，缓解瞬时网络抖动）
@@ -483,7 +356,7 @@ def run_report_generation(task: ReportTask, query: str, custom_template: str = "
                     'stage': 'agent_running',
                     'attempt': attempt
                 })
-                generation_result = report_agent.generate_report(
+                generation_result = agent.generate_report(
                     query=query,
                     reports=content['reports'],
                     forum_logs=content['forum_logs'],
@@ -535,6 +408,10 @@ def run_report_generation(task: ReportTask, query: str, custom_template: str = "
         else:
             html_report = generation_result
 
+        if task.status == 'cancelled':
+            logger.info(f"[task {task.task_id}] 任务在持久化前被取消，丢弃结果")
+            return
+
         task.publish_event('stage', {'message': '报告生成完毕，准备持久化', 'stage': 'persist'})
 
         # 保存结果
@@ -556,7 +433,7 @@ def run_report_generation(task: ReportTask, query: str, custom_template: str = "
         task.update_status("completed", 100)
         task.publish_event('completed', {
             'message': '任务完成',
-            'duration_seconds': (task.updated_at - task.created_at).total_seconds(),
+            'duration_seconds': (datetime.now() - datetime.fromisoformat(task.created_at)).total_seconds(),
             'report_file': task.report_file_relative_path or task.report_file_path,
             'task': task.to_dict(),
         })
@@ -569,10 +446,6 @@ def run_report_generation(task: ReportTask, query: str, custom_template: str = "
             'stage': 'failed',
             'task': task.to_dict(),
         })
-        # 只在出错时清理任务
-        with task_lock:
-            if current_task and current_task.task_id == task.task_id:
-                current_task = None
 
 
 @report_bp.route('/status', methods=['GET'])
@@ -592,7 +465,7 @@ def get_status():
             'engines_ready': engines_status['ready'],
             'files_found': engines_status.get('files_found', []),
             'missing_files': engines_status.get('missing_files', []),
-            'current_task': current_task.to_dict() if current_task else None
+            'current_task': (lambda t: t.to_dict() if t else None)(_latest_task()),
         })
     except Exception as e:
         logger.exception(f"获取Report Engine状态失败: {str(e)}")
@@ -616,22 +489,8 @@ def generate_report():
     返回:
         Response: JSON，包含 task_id 与 SSE stream url。
     """
-    global current_task
-
     try:
-        # 检查是否有任务在运行
-        with task_lock:
-            if current_task and current_task.status == "running":
-                return jsonify({
-                    'success': False,
-                    'error': '已有报告生成任务在运行中',
-                    'current_task': current_task.to_dict()
-                }), 400
-
-            # 如果有已完成的任务，清理它
-            if current_task and current_task.status in ["completed", "error"]:
-                current_task = None
-
+        # 去单例改造后允许多任务并发，由 RQ worker 逐个执行
         # 获取请求参数
         data = request.get_json() or {}
         if not isinstance(data, dict):
@@ -643,11 +502,13 @@ def generate_report():
         # 清空日志文件
         clear_report_log()
 
-        # 检查Report Engine是否初始化
-        if not report_agent:
+        # 检查Report Engine是否初始化（惰性兜底）
+        try:
+            _get_report_agent()
+        except Exception as e:
             return jsonify({
                 'success': False,
-                'error': 'Report Engine未初始化'
+                'error': f'Report Engine未初始化: {e}'
             }), 500
 
         # 检查输入文件是否准备就绪
@@ -659,33 +520,33 @@ def generate_report():
                 'missing_files': engines_status.get('missing_files', [])
             }), 400
 
-        # 创建新任务
-        task_id = f"report_{int(time.time())}"
-        task = ReportTask(query, task_id, custom_template)
-
-        with task_lock:
-            current_task = task
-            tasks_registry[task_id] = task
-            _prune_task_history_locked()
+        # 创建新任务（time_ns 避免同秒并发撞 id）
+        task_id = f"report_{time.time_ns()}"
+        task = ReportTask(task_id, query, custom_template)
 
         # 通过主动推送pending事件告知前端任务已经排队
+        info = task.to_dict()
         task.publish_event(
             'status',
             {
-                'status': task.status,
-                'progress': task.progress,
-                'message': '任务已排队，等待资源空闲',
-                'task': task.to_dict(),
+                'status': info['status'],
+                'progress': info['progress'],
+                'message': '任务已排队，等待 worker 执行',
+                'task': info,
             }
         )
 
-        # 在后台线程中运行报告生成
-        thread = threading.Thread(
-            target=run_report_generation,
-            args=(task, query, custom_template),
-            daemon=True
-        )
-        thread.start()
+        # 入 RQ 'pr' 队列，由 worker 进程异步执行
+        try:
+            from .tasks import enqueue_report_job
+            enqueue_report_job(task_id, query, custom_template)
+        except Exception as e:
+            task.update_status("error", 0, f"任务入队失败: {e}")
+            logger.exception(f"报告任务入队失败: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'任务入队失败: {e}'
+            }), 500
 
         return jsonify({
             'success': True,
@@ -766,11 +627,9 @@ def stream_task(task_id: str):
     if not task:
         return jsonify({'success': False, 'error': '任务不存在'}), 404
 
-    last_event_header = request.headers.get('Last-Event-ID')
-    try:
-        last_event_id = int(last_event_header) if last_event_header else None
-    except ValueError:
-        last_event_id = None
+    # 事件 id 即 Redis Stream 条目 id（形如 "1728483945000-3"），
+    # 浏览器断线重连时原样带回；旧版整型 id 无法映射，退回全量补发
+    last_event_id = request.headers.get('Last-Event-ID') or None
 
     def client_disconnected() -> bool:
         """
@@ -787,34 +646,44 @@ def stream_task(task_id: str):
 
     def event_generator():
         """
-        SSE事件生成器。
+        SSE事件生成器（消费 Redis Stream）。
 
-        - 负责注册并消费对应任务的事件队列；
-        - 先回放历史事件再持续监听实时事件；
-        - 周期性发送心跳并在任务结束后自动注销监听。
+        - 先按 Last-Event-ID 补发历史事件；
+        - XREAD BLOCK 持续监听新事件，超时则发心跳；
+        - 终态后事件流消费完自动收口。
         """
-        queue = _register_stream(task_id)
+        last_id = last_event_id
         last_data_ts = time.time()
         try:
             # 断线重连场景下，先补发历史事件，保证界面状态一致
-            history = task.history_since(last_event_id)
-            for event in history:
+            for event in task.history_since(last_id):
                 yield _format_sse(event)
                 if event.get('type') != 'heartbeat':
                     last_data_ts = time.time()
+                last_id = event.get('id') or last_id
+                if event.get('type') in ("completed", "error", "cancelled"):
+                    return
 
-            finished = task.status in STREAM_TERMINAL_STATUSES
             while True:
-                if finished:
-                    break
                 if client_disconnected():
                     logger.info(f"SSE客户端已断开，停止推送: {task_id}")
                     break
-                event = None
+
+                events = []
                 try:
-                    event = queue.get(timeout=STREAM_HEARTBEAT_INTERVAL)
-                except Empty:
-                    if task.status in STREAM_TERMINAL_STATUSES:
+                    events = task_store.read_events(
+                        task_id,
+                        after_id=last_id,
+                        block_ms=STREAM_HEARTBEAT_INTERVAL * 1000,
+                    )
+                except Exception as exc:
+                    logger.exception(f"SSE读取事件流失败（task {task_id}）: {exc}")
+                    break
+
+                if not events:
+                    # 超时无新事件：发心跳；任务已终态且事件消费完则收口
+                    status = task.status
+                    if status in STREAM_TERMINAL_STATUSES:
                         logger.info(f"任务 {task_id} 已结束且无新事件，SSE自动收口")
                         break
                     heartbeat = {
@@ -822,32 +691,30 @@ def stream_task(task_id: str):
                         'type': 'heartbeat',
                         'task_id': task_id,
                         'timestamp': datetime.utcnow().isoformat() + 'Z',
-                        'payload': {'status': task.status}
+                        'payload': {'status': status}
                     }
-                    event = heartbeat
-                if event is None:
-                    logger.warning(f"SSE推送获取事件失败（task {task_id}），提前结束")
-                    break
+                    events = [heartbeat]
 
-                try:
-                    yield _format_sse(event)
-                    if event.get('type') != 'heartbeat':
-                        last_data_ts = time.time()
-                except GeneratorExit:
-                    logger.info(f"SSE生成器关闭，停止任务 {task_id} 推送")
-                    break
-                except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError) as exc:
-                    logger.warning(f"SSE连接被客户端中断（task {task_id}）: {exc}")
-                    break
-                except Exception as exc:
-                    event_type = event.get('type') if isinstance(event, dict) else 'unknown'
-                    logger.exception(f"SSE推送失败（task {task_id}, event {event_type}）: {exc}")
-                    break
+                for event in events:
+                    try:
+                        yield _format_sse(event)
+                        if event.get('type') != 'heartbeat':
+                            last_data_ts = time.time()
+                    except GeneratorExit:
+                        logger.info(f"SSE生成器关闭，停止任务 {task_id} 推送")
+                        return
+                    except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError) as exc:
+                        logger.warning(f"SSE连接被客户端中断（task {task_id}）: {exc}")
+                        return
+                    except Exception as exc:
+                        logger.exception(f"SSE推送失败（task {task_id}）: {exc}")
+                        return
 
-                if event.get('type') in ("completed", "error", "cancelled"):
-                    finished = True
-                else:
-                    finished = finished or task.status in STREAM_TERMINAL_STATUSES
+                    if event.get('type') in ("completed", "error", "cancelled"):
+                        return
+
+                    if event.get('id'):
+                        last_id = event['id']
 
                 # 终态下最多保活一段时间，防止前端早已结束但后台循环未退出
                 if task.status in STREAM_TERMINAL_STATUSES:
@@ -855,8 +722,8 @@ def stream_task(task_id: str):
                     if idle_for > STREAM_IDLE_TIMEOUT:
                         logger.info(f"任务 {task_id} 已终态且空闲 {int(idle_for)}s，主动关闭SSE")
                         break
-        finally:
-            _unregister_stream(task_id, queue)
+        except GeneratorExit:
+            logger.info(f"SSE生成器关闭，停止任务 {task_id} 推送")
 
     response = Response(
         stream_with_context(event_generator()),
@@ -996,35 +863,41 @@ def cancel_task(task_id: str):
     返回:
         Response: JSON，包含取消结果或错误信息。
     """
-    global current_task
-
     try:
-        with task_lock:
-            if current_task and current_task.task_id == task_id:
-                if current_task.status == "running":
-                    current_task.update_status("cancelled", 0, "用户取消任务")
-                    current_task.publish_event('cancelled', {
-                        'message': '任务被用户主动终止',
-                        'task': current_task.to_dict(),
-                    })
-                current_task = None
-            task = tasks_registry.get(task_id)
-            if task and task.status == 'running':
-                task.update_status("cancelled", task.progress, "用户取消任务")
-                task.publish_event('cancelled', {
-                    'message': '任务被用户主动终止',
-                    'task': task.to_dict(),
-                })
+        task = _get_task(task_id)
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': '任务不存在'
+            }), 404
 
-                return jsonify({
-                    'success': True,
-                    'message': '任务已取消'
-                })
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': '任务不存在或无法取消'
-                }), 404
+        if task.status not in ('running', 'pending'):
+            return jsonify({
+                'success': False,
+                'error': '任务不存在或无法取消'
+            }), 404
+
+        task.update_status("cancelled", 0, "用户取消任务")
+        task.publish_event('cancelled', {
+            'message': '任务被用户主动终止',
+            'task': task.to_dict(),
+        })
+
+        # 尽力取消 RQ 侧尚未开始执行的 job；执行中的由
+        # run_report_generation 在阶段边界检测 cancelled 后自行退出
+        try:
+            import rq
+            queue = rq.Queue('pr', connection=task_store.get_redis())
+            job = queue.fetch_job(f"report_{task_id}")
+            if job is not None:
+                job.cancel()
+        except Exception:
+            logger.warning(f"RQ 侧取消失败（task {task_id}），已仅标记 Redis 状态")
+
+        return jsonify({
+            'success': True,
+            'message': '任务已取消'
+        })
 
     except Exception as e:
         logger.exception(f"取消报告生成任务失败: {str(e)}")
@@ -1043,11 +916,7 @@ def get_templates():
         Response: JSON，列出模板名称/描述/大小。
     """
     try:
-        if not report_agent:
-            return jsonify({
-                'success': False,
-                'error': 'Report Engine未初始化'
-            }), 500
+        _get_report_agent()  # 确保引擎可用（幂等）
 
         template_dir = settings.TEMPLATE_DIR
         templates = []
@@ -1228,7 +1097,7 @@ def export_markdown(task_id: str):
     基于已保存的 Document IR 调用 MarkdownRenderer，生成文件并返回下载。
     """
     try:
-        task = tasks_registry.get(task_id)
+        task = _get_task(task_id)
         if not task:
             return jsonify({
                 'success': False,
@@ -1317,7 +1186,7 @@ def export_pdf(task_id: str):
             }), 503
 
         # 获取任务信息
-        task = tasks_registry.get(task_id)
+        task = _get_task(task_id)
         if not task:
             return jsonify({
                 'success': False,

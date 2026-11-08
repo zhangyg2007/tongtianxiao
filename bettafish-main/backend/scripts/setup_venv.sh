@@ -20,6 +20,7 @@ source "$VENV/bin/activate"
 echo "==> 安装 P0 精简依赖"
 pip install --upgrade pip
 pip install flask "redis>=4.6" rq psycopg2-binary asyncpg loguru "pydantic>=2" \
-    python-dotenv tenacity apscheduler
+    python-dotenv tenacity apscheduler \
+    openai json-repair pydantic-settings matplotlib scipy wordcloud weasyprint
 
 echo "==> 完成。激活方式：source $VENV/bin/activate"

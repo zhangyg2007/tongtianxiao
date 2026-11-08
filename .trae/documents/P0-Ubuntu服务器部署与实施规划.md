@@ -131,11 +131,12 @@ systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参
 - ✅ `bettafish-main/backend/migrations/001_core_schema.sql`（core.* 9 张表，环境无关）
 - ✅ `bettafish-main/backend/scripts/`（install_env / init_db / setup_venv 三个一键脚本）
 - ✅ `bettafish-main/backend/worker/`（RQ 骨架：dd/pr 双队列、job 执行期间 15s 心跳、APScheduler 60s 僵死扫描、demo_pipeline 自检处理器、submit_task/cancel_task 辅助函数）
+- ✅ ReportEngine 去单例改造：`current_task` 全局单例已删除，任务状态/事件迁 Redis（`ReportEngine/task_store.py`：Hash + Stream，TTL 7 天），`/generate` 改入 RQ 'pr' 队列由 worker 执行（`ReportEngine/tasks.py`），SSE 改 XREAD BLOCK 消费，支持多任务并发；worker venv 依赖已补 ReportEngine 运行包（setup_venv.sh），install_env.sh 补 weasyprint 系统库
 
 **服务器就位后（顺序执行）**：
 1. 执行 §2 安装 + §3 初始化验证（预计半天内）
 2. 按 §4 启动 worker + scheduler，跑「队列链路自检」验证 RQ 骨架
-3. ReportEngine 去单例改造（`flask_interface.py:31-32` 全局单例 → Redis task_store）
+3. 验证 ReportEngine 链路：起 Flask 主应用 + worker 后，从旧 UI 发起报告生成，确认 SSE 进度正常、任务状态落 Redis
 4. InsightEngine 执行体抽离 Streamlit（runner + on_progress 回调）
 5. SSE 结构化进度 + `/api/v1/tasks` /objects /artifacts
 6. React 前端（案卷列表/详情/证据抽屉）
