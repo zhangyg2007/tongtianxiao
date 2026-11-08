@@ -71,6 +71,47 @@ def get_task(task_id: str) -> dict | None:
         return cur.fetchone()
 
 
+def list_tasks(
+    product_line: str | None = None,
+    status: str | None = None,
+    object_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """任务列表（新版分页，按创建时间倒序）。"""
+    where, params = [], []
+    if product_line:
+        where.append("product_line = %s")
+        params.append(product_line)
+    if status:
+        where.append("status = %s")
+        params.append(status)
+    if object_id is not None:
+        where.append("object_id = %s")
+        params.append(object_id)
+    sql = "SELECT * FROM core.task"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+    params += [max(1, min(limit, 200)), max(0, offset)]
+    with get_conn() as conn, conn.cursor(
+        cursor_factory=psycopg2.extras.RealDictCursor
+    ) as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def get_steps(task_id: str) -> list[dict]:
+    """任务步骤列表（按 seq 升序）。"""
+    with get_conn() as conn, conn.cursor(
+        cursor_factory=psycopg2.extras.RealDictCursor
+    ) as cur:
+        cur.execute(
+            "SELECT * FROM core.task_step WHERE task_id = %s ORDER BY seq", (task_id,)
+        )
+        return cur.fetchall()
+
+
 def mark_running(task_id: str, worker_id: str) -> None:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
