@@ -123,6 +123,10 @@ psql -d bettafish -c "SELECT seq, name, status, duration_ms FROM core.task_step 
 1. 注册对象（如「某某科技有限公司」，natural_key 填统一社会信用代码）；
 2. 在对象行点「发起任务」→ demo_pipeline → 提交，跳转任务详情页看 SSE 步骤流与进度条；
 3. 任务完成后进对象详情页「证据」Tab——点击任一证据，30 秒内应看到原文片段（quote）+「打开原文出处」链接（demo_pipeline 已写入 3 条样例证据 + 1 条产物记录）。
+4. 再对该对象发起 investment_dd → 产出 12 章投资尽调报告（含评分卡三态表、覆盖率、
+   证据附录与后校验结果），`core.artifact` / `artifact_block` / `artifact_citation`
+   落库可查：`psql -d bettafish -c "SELECT marker, evidence_id, checked FROM core.artifact_citation;"`
+   （预期 3 处引用 checked=t）；纯函数单测：`cd bettafish-main && python -m unittest tests.test_dd_p0 -v`
 
 systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参数。
 
@@ -141,6 +145,7 @@ systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参
 - ✅ InsightEngine 执行体抽离 Streamlit（`InsightEngine/runner.py`：run_research 纯执行体 + on_progress 结构化事件 + should_stop 段落边界取消），注册为 `insight_research` 处理器（延迟导入重依赖）
 - ✅ `/api/v1` 统一接口（`backend/api/v1.py`：任务 CRUD/取消、SSE 结构化进度 task/step/end、对象注册/搜索、产物与证据查询）+ `backend/worker/objects.py` / `evidence.py`（object 幂等注册、artifact 登记、evidence content_hash 幂等写入）
 - ✅ React 前端（`bettafish-main/frontend/`：Vite + React18 + TS + AntD5；案卷列表、任务列表、任务详情 SSE 实时步骤、对象详情、证据抽屉）；demo_pipeline 扩为四步并写入 3 条样例证据 + 1 条产物记录，供前端全链路验证
+- ✅ 投资尽调 P0（`bettafish-main/backend/dd/`）：12 章模板（template.py，数据驱动）+ 评分卡三态判定（scorecard.py：🟢/🔴/⚪ + 覆盖率阈值 + 一票否决）+ 证据后校验（verify.py：E{id} 引用校验 + 句级数字回查 quote）+ investment_dd 处理器（pipeline.py：组装 → 后校验 → artifact/block/citation 落库）；纯函数单测 20 例（tests/test_dd_p0.py，本机已跑通）
 
 **服务器就位后（顺序执行）**：
 1. 执行 §2 安装 + §3 初始化验证（预计半天内）
@@ -148,7 +153,7 @@ systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参
 3. 验证 ReportEngine 链路：起 Flask 主应用 + worker 后，从旧 UI 发起报告生成，确认 SSE 进度正常、任务状态落 Redis
 4. 验证 InsightEngine 链路：`/api/v1/tasks` 提交 insight_research（pr），确认任务详情页 SSE 段落进度正常
 5. 前端全链路自检（§4「前端全链路自检」）——P0 验收入口
-6. 投资尽调模板（12 章）+ 证据后校验（编码中）
+6. investment_dd 链路验证（§4 第 4 步）
 
 **P0 验收标准（不变，见设计文档 §6.1）**：业务方拿到一份报告，随机挑 5 个结论，每一个都能在 30 秒内点开看到原文出处。
 

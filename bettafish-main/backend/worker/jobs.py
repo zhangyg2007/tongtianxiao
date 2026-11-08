@@ -141,7 +141,7 @@ def demo_pipeline(ctx: TaskContext, input: dict) -> dict:
                     source_type="gsxt",
                     source_name="国家企业信用信息公示系统",
                     source_url="https://example.gov.cn/penalty/2024-0312-001",
-                    quote="……责令当事人停止发布违法广告，罚款人民币贰佰万元整……",
+                    quote="……于2024-03-12责令当事人停止发布违法广告，罚款人民币200万元（贰佰万元整）……",
                     value_json={"amount": 2000000, "currency": "CNY", "date": "2024-03-12"},
                     published_at=datetime(2024, 3, 12, tzinfo=timezone.utc),
                     confidence=95,
@@ -153,7 +153,7 @@ def demo_pipeline(ctx: TaskContext, input: dict) -> dict:
                     source_type="court",
                     source_name="人民法院公告网",
                     source_url="https://example.court.gov.cn/case/2024-0620-776",
-                    quote="本院定于2024年6月20日9时在第五法庭公开审理原告某贸易公司诉被告"
+                    quote="本院定于2024-06-20 9时在第五法庭公开审理原告某贸易公司诉被告"
                           f"{name}买卖合同纠纷一案。",
                     published_at=datetime(2024, 6, 20, tzinfo=timezone.utc),
                     confidence=95,
@@ -278,3 +278,8 @@ def insight_research(ctx: TaskContext, input: dict) -> dict:
         for p in result.get("paragraphs", [])
     ]
     return slim
+
+
+# ====== 引擎接入：投资尽调（评分卡 + 12 章模板 + 证据后校验） ======
+# 延迟导入触发 @register 注册（dd 模块轻量，无重依赖）
+from ..dd import pipeline as _dd_pipeline  # noqa: E402, F401

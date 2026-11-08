@@ -147,3 +147,55 @@ def register_artifact(
             ),
         )
         return str(cur.fetchone()[0])
+
+
+def write_artifact_blocks(artifact_id: str, blocks: list[dict]) -> list[int]:
+    """批量写入 core.artifact_block，返回 block_id 列表（顺序与 blocks 一致）。
+
+    blocks: [{seq, chapter_no?, block_type, heading?, content_md}]
+    """
+    ids = []
+    with get_conn() as conn, conn.cursor() as cur:
+        for b in blocks:
+            cur.execute(
+                """
+                INSERT INTO core.artifact_block
+                    (artifact_id, seq, chapter_no, block_type, heading, content_md)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING block_id
+                """,
+                (
+                    artifact_id,
+                    b["seq"],
+                    b.get("chapter_no"),
+                    b["block_type"],
+                    b.get("heading"),
+                    b.get("content_md"),
+                ),
+            )
+            ids.append(cur.fetchone()[0])
+    return ids
+
+
+def write_citation(
+    artifact_id: str,
+    block_id: int,
+    marker: str,
+    evidence_id: int,
+    checked: bool,
+    sentence_idx: int | None = None,
+) -> int:
+    """写入句级引用绑定 core.artifact_citation（同一角标重复写时更新 checked）。"""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO core.artifact_citation
+                (artifact_id, block_id, sentence_idx, marker, evidence_id, checked)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (artifact_id, block_id, marker)
+                DO UPDATE SET checked = EXCLUDED.checked
+            RETURNING citation_id
+            """,
+            (artifact_id, block_id, sentence_idx, marker, evidence_id, checked),
+        )
+        return cur.fetchone()[0]

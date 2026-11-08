@@ -6,6 +6,7 @@ import { api } from '../api/client';
 const TASK_TYPES = [
   { value: 'demo_pipeline', label: 'demo_pipeline · 链路验证演示' },
   { value: 'insight_research', label: 'insight_research · 舆情深度研究' },
+  { value: 'investment_dd', label: 'investment_dd · 投资尽调报告（12 章）' },
 ];
 
 interface Props {
