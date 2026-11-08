@@ -3,16 +3,16 @@
 > 版本：v1.0（部署规划，待服务器实测）
 > 前置文档：[前端与产品形态升级设计.md](./前端与产品形态升级设计.md)（P0 计划见其 §6.1）
 > 编制日期：2026-11-08
-> 目标环境：公司 Ubuntu 服务器（具体版本待确认，本文按 22.04 / 24.04 LTS 双轨给出）
+> 目标环境：公司 Ubuntu **24.04 LTS x64**（已确认：内存 64G / /data/projects 硬盘 1TB / 支持 Docker）
 > 开发模式：工作站安装 Trae → SSH 连接服务器 → 在服务器上克隆仓库远程开发
 
 ---
 
 ## 0. 核心结论
 
-1. **Ubuntu 是比 Windows 顺得多的目标环境**：PG 和 Redis 都是 apt 直装，Windows 上的 Memurai/WSL2 选型问题直接消失。
+1. **Ubuntu 是比 Windows 顺得多的目标环境**：PG 和 Redis 都是 apt 直装，Windows 上的 Memurai/WSL2 选型问题直接消失。服务器虽支持 Docker，但 PG/Redis 选 **apt 直装作公共环境**（systemd 托管、开机自启、排障简单），Docker 留作后续可选项。
 2. **Python 必须用 3.10/3.11，不能用 3.12+**：遗留代码钉死的 2023 年包（Pillow 9.5.0、streamlit 1.28.1、eventlet 0.33.3、pydantic 2.5.2）没有 cp312/cp313 预编译 wheel。已实测：Python 3.13 上装 Pillow 9.5.0 直接构建失败。
-3. **P0 代码先行，服务器到位后半天内完成环境安装**：所有基础设施步骤已收敛为本文 §2 的一条命令块 + §3 的初始化验证。
+3. **P0 代码先行，服务器到位后半天内完成环境安装**：安装步骤已固化为仓库内一键脚本（`backend/scripts/`：install_env → init_db → setup_venv），服务器 `git pull` 后依次执行即可，无需手工敲命令。
 
 ---
 
@@ -20,18 +20,28 @@
 
 | 组件 | 选型 | 安装方式 | 依据 |
 |---|---|---|---|
-| 操作系统 | Ubuntu **24.04 LTS** 优先（22.04 亦可） | — | 24.04 的 apt 源带 PG16 + Redis 7；22.04 是 PG14 + Redis 6.0，P0 均够用 |
-| Python | **3.11**（3.10 亦可） | 24.04 需 deadsnakes PPA；22.04 自带 3.10 | 遗留钉死包的安全区间是 ≤3.11（Pillow 9.5.0 最高提供 cp311 wheel） |
-| PostgreSQL | 16（24.04）/ 14（22.04） | `apt install postgresql` | DDL 用到的 `gen_random_uuid()` 需 PG13+，两者均满足 |
-| Redis | 7.x（24.04）/ 6.0（22.04） | `apt install redis-server` | RQ 依赖，apt 装完即系统服务，开机自启 |
+| 操作系统 | Ubuntu **24.04 LTS x64**（已确认） | — | apt 源带 PG16 + Redis 7，均满足 P0 需要 |
+| Python | **3.11** | 24.04 需 deadsnakes PPA | 遗留钉死包的安全区间是 ≤3.11（Pillow 9.5.0 最高提供 cp311 wheel） |
+| PostgreSQL | 16 | `apt install postgresql` | DDL 用到的 `gen_random_uuid()` 需 PG13+；作公共环境 systemd 托管 |
+| Redis | 7.x | `apt install redis-server` | RQ 依赖，apt 装完即系统服务，开机自启 |
 | Node.js | 20 LTS | NodeSource | 仅前端构建期需要（React18+Vite+AntD5） |
-| 仓库 | github.com/zhangyg2007/tongtianxiao（main） | git clone | 即当前仓库 |
+| 仓库 | github.com/zhangyg2007/tongtianxiao（main） | git clone 到 `/data/projects/tongtianxiao` | 数据盘 1TB，避开系统盘 |
 
-**不需要**：Docker、conda、Memurai、WSL2。
+**不引入**：conda、Memurai、WSL2。Docker 服务器虽支持，P0 不使用（PG/Redis 走 apt 公共环境），留作后续可选。
 
 ---
 
-## 2. 安装步骤（服务器上执行）
+## 2. 安装步骤（已固化为脚本）
+
+服务器上 `git pull` 仓库到 `/data/projects/tongtianxiao` 后，依次执行三个脚本即可（等价于原先的手工命令，保留如下备查）：
+
+```bash
+bash bettafish-main/backend/scripts/install_env.sh   # PG16 + Redis7 + Python3.11 + Node20
+bash bettafish-main/backend/scripts/init_db.sh       # 建库 bettafish + 执行 core schema DDL
+bash bettafish-main/backend/scripts/setup_venv.sh    # 仓库根 .venv + P0 精简依赖
+```
+
+<details><summary>手工命令备查（与脚本等价）</summary>
 
 ```bash
 # 0. 基础工具
@@ -50,11 +60,13 @@ sudo apt install -y python3.11 python3.11-venv python3.11-dev
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# 4. 克隆仓库
-git clone https://github.com/zhangyg2007/tongtianxiao.git ~/tongtianxiao
+# 4. 克隆仓库（数据盘）
+git clone https://github.com/zhangyg2007/tongtianxiao.git /data/projects/tongtianxiao
 ```
 
-> 注：`requirements.txt` 含 torch（CPU 版约 200MB+），全量安装较慢。P0 骨架阶段可先建精简依赖（flask/rq/redis/psycopg/asyncpg/loguru/pydantic），跑通链路后再补全量。
+</details>
+
+> 注：`requirements.txt` 含 torch（CPU 版约 200MB+），全量安装较慢。`setup_venv.sh` 已按此先装精简依赖（flask/rq/redis/psycopg/asyncpg/loguru/pydantic），跑通链路后再补全量。
 
 ---
 
@@ -99,9 +111,10 @@ systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参
 
 ## 5. P0 进度与后续步骤
 
-**已完成（已入库或待本次提交）**：
-- ✅ 全部设计文档（本目录 5 份）
+**已完成（已入库）**：
+- ✅ 全部设计文档（本目录 6 份，含本文档）
 - ✅ `bettafish-main/backend/migrations/001_core_schema.sql`（core.* 9 张表，环境无关）
+- ✅ `bettafish-main/backend/scripts/`（install_env / init_db / setup_venv 三个一键脚本）
 
 **服务器就位后（顺序执行）**：
 1. 执行 §2 安装 + §3 初始化验证（预计半天内）
@@ -120,8 +133,8 @@ systemd 服务化推迟到 P1（多人使用后），避免过早固化进程参
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | 服务器 Ubuntu 版本未知 | 22.04 与 24.04 命令略有差异，§2 已双轨标注；拿到服务器先 `lsb_release -a` |
+| 1 | PG/Redis 作公共环境，多项目共用 | 当前脚本按本机独占 5432/6379 规划；若公司已有 PG/Redis 实例，需改为复用（改库名/连接串），勿重复装实例 |
 | 2 | 内网 GitHub 访问 | 公司服务器如访问不了 GitHub，改为工作站打包 rsync/scp 上传 |
 | 3 | requirements 全量安装慢 | torch 等 ML 包体积大；P0 骨架阶段用精简依赖先行 |
-| 4 | 服务器资源未知 | 设计文档假定的 64G 单机场景；若配置更低，P0 无影响（单任务跑通即可），P1 再评估 |
+| 4 | deadsnakes/NodeSource 外部源不可达 | 公司内网若屏蔽外部 PPA，需离线安装 Python 3.11 或改用 24.04 自带 3.12 + 升级钉死包（后者工作量大，尽量争取外网访问） |
 | 5 | `.env` 不入库 | 密钥（LLM API key 等）在服务器上手写，`.gitignore` 已排除 |
