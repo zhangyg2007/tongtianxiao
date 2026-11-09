@@ -294,13 +294,17 @@ secrets.json
 *.key
 *.pem
 *.crt
-# 各引擎/业务私有配置继续忽略
+# 各引擎/业务私有配置默认忽略
 config.py
-MindSpider/config.py
-# 例外：主配置与 worker 配置必须入库，否则干净克隆 import 失败。
-# 二者只放占位默认值，真实密钥一律走 .env（.env 已忽略）。
+# 例外：主配置、worker 配置与各引擎配置必须入库，否则干净克隆 import 失败。
+# 这些文件只放占位默认值，真实密钥一律走 .env（.env 已忽略）。
 !/config.py
 !backend/worker/config.py
+!MindSpider/config.py
+!InsightEngine/utils/config.py
+!MediaEngine/utils/config.py
+!QueryEngine/utils/config.py
+!ReportEngine/utils/config.py
 
 # API 密钥
 api_keys.txt
