@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bettafish.local/schemas/evidence.schema.json",
+  "title": "Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidence_id",
+    "object_id",
+    "fact",
+    "fact_type",
+    "source_type",
+    "source_url",
+    "quote",
+    "published_at",
+    "collected_at",
+    "confidence",
+    "collected_by"
+  ],
+  "properties": {
+    "evidence_id": {
+      "type": ["string", "null"],
+      "pattern": "^E[0-9]{1,9}$",
+      "description": "运行时角标；采集阶段为 null，入黑板后分配"
+    },
+    "db_evidence_id": {
+      "type": ["integer", "null"],
+      "description": "core.evidence.evidence_id，入库后回填"
+    },
+    "object_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "task_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "fact": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 300
+    },
+    "fact_type": {
+      "enum": ["registration", "penalty", "litigation", "finance", "bid", "ip", "sentiment", "exec_change"]
+    },
+    "value_json": {
+      "type": ["object", "null"],
+      "description": "结构化值，如 {amount, currency, unit_raw, date}"
+    },
+    "source_type": {
+      "enum": ["gsxt", "creditchina", "court", "cninfo", "tianyancha", "news", "social"]
+    },
+    "source_name": {
+      "type": ["string", "null"],
+      "maxLength": 100
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://"
+    },
+    "doc_id": {
+      "type": ["integer", "null"]
+    },
+    "page_no": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "quote": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 1000,
+      "description": "原文连续片段，逐字摘录，禁止拼接改写"
+    },
+    "published_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "collected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "confidence_reason": {
+      "type": ["string", "null"],
+      "maxLength": 200
+    },
+    "source_grade": {
+      "enum": ["A", "B", "C", "D", "X"]
+    },
+    "collected_by": {
+      "type": "string",
+      "enum": ["collector"]
+    },
+    "verify_status": {
+      "enum": ["auto", "confirmed", "rejected", "needs_review"],
+      "default": "auto"
+    },
+    "injection_suspected": {
+      "type": "boolean",
+      "default": false
+    },
+    "content_hash": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

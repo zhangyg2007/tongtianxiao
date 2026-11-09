@@ -1,0 +1,149 @@
+{
+  "case_id": "adv_03_conflict_evidence",
+  "case_type": "adversarial",
+  "synthetic": true,
+  "title": "对抗案例 3：证据冲突（诉讼状态）",
+  "purpose": "两条证据对同一案件状态给出不同结论（一审判决驳回 vs 已调解结案）。检验是否触发 Arbiter、是否按“证据等级 > 置信度 > 时效性 > 推理链长度”裁决，并保留败方意见。",
+  "object": {
+    "object_id": 9003,
+    "object_type": "company",
+    "display_name": "鼎昌建设工程有限公司",
+    "natural_key": {"uscc": "91330203MA2AF6K88P"},
+    "display_meta": {"note": "人为构造，非真实企业"}
+  },
+  "task": {
+    "task_id": "44444444-4444-4444-8444-444444444444",
+    "product_line": "investment_dd",
+    "task_type": "due_diligence",
+    "requested_by": 1,
+    "created_at": "2026-11-09T10:00:00+08:00"
+  },
+  "params": {
+    "time_range": {"from": "2024-01-01", "to": "2026-11-09"},
+    "template_code": "investment_dd_v1",
+    "budget": {"max_llm_calls": 30, "max_tokens": 70000, "max_wall_clock_s": 1200},
+    "constraints": ["冲突结论必须交 Arbiter", "败方意见必须保留为 dissent"],
+    "dimension_catalog": [
+      {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2},
+      {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.5}
+    ],
+    "allowed_source_types": ["court", "cninfo", "news"],
+    "collection_requests": [
+      {"request_id": "r1", "dimension": "legal", "query": "鼎昌建设 建设工程合同纠纷 判决 调解", "max_items": 10}
+    ],
+    "existing_content_hashes": [],
+    "tool_call_budget": {"total_calls": 8, "per_request": 4},
+    "source_grade_rules": {"A": "法院/官方", "B": "商业数据", "C": "媒体", "D": "自媒体", "X": "LLM 推断"},
+    "allowed_domains": ["example.invalid"],
+    "object_identifiers": {"name": "鼎昌建设工程有限公司", "uscc": "91330203MA2AF6K88P"},
+    "dimension": {"dimension": "legal", "fact_types": ["litigation"], "weight": 0.5},
+    "rubric": "同一事实出现相反结论时必须触发 Arbiter；不得直接折中或选择性忽略。",
+    "conflict_report": {
+      "conflict_id": "c-01",
+      "dimension": "legal",
+      "analysis_ids": ["a-01", "a-02"],
+      "issue": "同一建设工程合同纠纷的案件状态：一审判决驳回 vs 已调解结案",
+      "evidence_ids": ["E01", "E02"]
+    },
+    "priority": ["source_grade", "confidence", "recency", "reasoning_steps_desc"],
+    "chapter_spec": [{"seq": 1, "title": "诉讼状态", "block_type": "paragraph", "max_chars": 800}],
+    "scorecard": {"dimensions": {"registration": 65, "legal": 40}},
+    "compliance_note": "本案例为人为构造，仅用于测试，不构成投资建议。",
+    "review_scope": {"blocks": "all", "strict": true},
+    "deterministic_findings": []
+  },
+  "dimensions": [
+    {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2, "required": true},
+    {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.5, "required": true}
+  ],
+  "evidence": [
+    {
+      "evidence_id": "E01", "object_id": 9003,
+      "fact": "法院一审判决驳回原告全部诉讼请求。",
+      "fact_type": "litigation", "source_type": "court",
+      "source_name": "宁波市鄞州区人民法院（构造样例）",
+      "source_url": "https://example.invalid/court/dingchang-2026-0512",
+      "quote": "本院认为，原告的诉讼请求缺乏事实依据，判决驳回原告的全部诉讼请求。",
+      "published_at": "2026-05-20T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 90, "confidence_reason": "法院公开裁判文书（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    },
+    {
+      "evidence_id": "E02", "object_id": 9003,
+      "fact": "媒体报道双方已达成调解，被告将分期支付工程款。",
+      "fact_type": "litigation", "source_type": "news",
+      "source_name": "构造样例财经媒体",
+      "source_url": "https://example.invalid/news/dingchang-mediation",
+      "quote": "双方已达成调解，被告鼎昌建设将分期支付工程款。",
+      "published_at": "2026-05-21T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 55, "confidence_reason": "单一媒体报道，未取得调解书", "source_grade": "C",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E03", "object_id": 9003,
+      "fact": "鼎昌建设工程有限公司统一社会信用代码为91330203MA2AF6K88P。",
+      "fact_type": "registration", "source_type": "gsxt",
+      "source_name": "国家企业信用信息公示系统（构造样例）",
+      "source_url": "https://example.invalid/gsxt/dingchang",
+      "quote": "名称：鼎昌建设工程有限公司 统一社会信用代码：91330203MA2AF6K88P",
+      "published_at": "2026-01-10T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 90, "confidence_reason": "官方登记信息（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    }
+  ],
+  "analyses": [
+    {
+      "analysis_id": "a-01",
+      "dimension": "legal",
+      "conclusion": "该案一审判决驳回原告全部诉讼请求。",
+      "evidence_ids": ["E01"],
+      "confidence": 85,
+      "polarity": "neutral",
+      "missing_data": []
+    },
+    {
+      "analysis_id": "a-02",
+      "dimension": "legal",
+      "conclusion": "双方已调解结案，被告将分期支付工程款。",
+      "evidence_ids": ["E02"],
+      "confidence": 55,
+      "polarity": "risk",
+      "missing_data": ["调解书原文"]
+    }
+  ],
+  "source_texts": {
+    "https://example.invalid/court/dingchang-2026-0512": "宁波市鄞州区人民法院 民事判决书 本院认为，原告的诉讼请求缺乏事实依据，判决驳回原告的全部诉讼请求。",
+    "https://example.invalid/news/dingchang-mediation": "双方已达成调解，被告鼎昌建设将分期支付工程款。",
+    "https://example.invalid/gsxt/dingchang": "国家企业信用信息公示系统 名称：鼎昌建设工程有限公司 统一社会信用代码：91330203MA2AF6K88P"
+  },
+  "gate_expectations": {
+    "rejected_evidence_ids": [],
+    "needs_review_evidence_ids": [],
+    "stale_evidence_ids": [],
+    "injection_evidence_ids": [],
+    "expected_auto_level": "full",
+    "expected_arbiter_conflict_id": "c-01"
+  },
+  "golden": {
+    "expected_status": "arbitrated",
+    "must_include": ["冲突", "Arbiter", "证据等级", "异议", "待验证"],
+    "must_not_include": ["确认已调解结案", "公司已败诉", "公司胜诉", "法院判决与调解结果一致"],
+    "expected_analysis": [
+      {"dimension": "legal", "polarity": "neutral", "must_cite": ["E01", "E02"], "missing_data": ["调解书原文", "二审或执行阶段文书"]}
+    ],
+    "expected_gates": [
+      {"gate": "arbiter", "expected": "trigger:c-01"},
+      {"gate": "dissent", "expected": "retained"},
+      {"gate": "priority", "expected": "source_grade_first"}
+    ],
+    "scoring": {
+      "fact_accuracy_target": 1.0,
+      "citation_compliance_target": 1.0,
+      "coverage_target": 1.0,
+      "hallucination_rate_target": 0.0,
+      "quote_verifiable_target": 1.0,
+      "note": "必须体现裁决理由与败方意见，不能只给一个结论。"
+    },
+    "sample_answer_md": "## 一、工商信息\n\n鼎昌建设工程有限公司统一社会信用代码为91330203MA2AF6K88P（依据 E03）。\n\n## 二、诉讼状态（存在冲突）\n\n法院公开信息显示，该案一审判决驳回原告的全部诉讼请求（依据 E01）。媒体信息则称双方已达成调解、被告分期支付工程款（依据 E02）。\n\n[分析意见] 两条证据对同一案件状态给出不同结论，已触发 Arbiter。按“证据等级 > 置信度 > 时效性 > 推理链长度（倒扣）”的优先级，法院公开信息为 A 级、媒体信息为 C 级，本次采信一审判决结果；媒体说法作为异议保留，不作为结论（依据 E01、E02）。\n\n【数据缺失】未获取到调解书原文，也未获取到二审或执行阶段文书，案件最终状态待验证。\n"
+  }
+}

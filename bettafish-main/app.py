@@ -234,9 +234,10 @@ def write_config_values(updates):
     # 写入 .env 文件
     env_file_path.parent.mkdir(parents=True, exist_ok=True)
     env_file_path.write_text('\n'.join(env_lines) + '\n', encoding='utf-8')
-    
-    # 重新加载配置模块（这会重新读取 .env 文件并创建新的 Settings 实例）
-    _load_config_module()
+
+    # 原地热加载全局配置代理（不 reload 模块，所有已 import settings 的模块立即可见）
+    from config import reload_settings
+    reload_settings()
 
 
 system_state_lock = threading.Lock()

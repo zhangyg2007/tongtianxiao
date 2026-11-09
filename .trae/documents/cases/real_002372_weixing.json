@@ -1,0 +1,732 @@
+{
+  "case_id": "real_002372_weixing",
+  "case_type": "real",
+  "synthetic": false,
+  "title": "伟星新材（002372）投资尽调试跑案例",
+  "purpose": "用一家公开信息充分、非巨头型 A 股公司验证七个 Agent 的模板装配、引用强制、数字回查、缺失标注与跨维度覆盖。所有证据均来自公开可访问页面，采集时间 2026-11-09。",
+  "object": {
+    "object_id": 1,
+    "object_type": "company",
+    "display_name": "浙江伟星新型建材股份有限公司",
+    "natural_key": {
+      "uscc": "91330000719525019T",
+      "stock_code": "002372",
+      "exchange": "SZSE"
+    },
+    "display_meta": {
+      "short_name": "伟星新材",
+      "industry": "塑料管道制造",
+      "registered_address": "浙江省临海经济开发区"
+    }
+  },
+  "task": {
+    "task_id": "11111111-1111-4111-8111-111111111111",
+    "product_line": "investment_dd",
+    "task_type": "due_diligence",
+    "requested_by": 1,
+    "created_at": "2026-11-09T10:00:00+08:00"
+  },
+  "params": {
+    "time_range": {"from": "2023-01-01", "to": "2026-11-09"},
+    "template_code": "investment_dd_v1",
+    "budget": {"max_llm_calls": 40, "max_tokens": 120000, "max_wall_clock_s": 1800},
+    "constraints": [
+      "媒体测算值只能作为 [分析意见]，不得写成事实结论",
+      "每个事实句必须带 evidence_id 角标",
+      "未获取的数据写入 missing_data，不得用推测补全"
+    ],
+    "dimension_catalog": [
+      {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2},
+      {"dimension": "executive", "fact_types": ["exec_change"], "weight": 0.15},
+      {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.25},
+      {"dimension": "finance", "fact_types": ["finance"], "weight": 0.25},
+      {"dimension": "bid", "fact_types": ["bid"], "weight": 0.1},
+      {"dimension": "sentiment", "fact_types": ["sentiment"], "weight": 0.05}
+    ],
+    "allowed_source_types": ["gsxt", "creditchina", "court", "cninfo", "tianyancha", "news", "social"],
+    "collection_requests": [
+      {"request_id": "r1", "dimension": "registration", "query": "伟星新材 统一社会信用代码 控股股东 质押", "max_items": 10},
+      {"request_id": "r2", "dimension": "executive", "query": "伟星新材 董事长 总经理 董秘 薪酬 增持", "max_items": 10},
+      {"request_id": "r3", "dimension": "legal", "query": "伟星新材 重大诉讼 仲裁 行政处罚", "max_items": 8},
+      {"request_id": "r4", "dimension": "finance", "query": "伟星新材 2025年报 2026半年报 三季报", "max_items": 12},
+      {"request_id": "r5", "dimension": "bid", "query": "伟星新材 中标 合同 公共资源交易", "max_items": 8},
+      {"request_id": "r6", "dimension": "sentiment", "query": "伟星新材 三季报 媒体解读 股价", "max_items": 6}
+    ],
+    "existing_content_hashes": [],
+    "tool_call_budget": {"total_calls": 24, "per_request": 5},
+    "source_grade_rules": {
+      "A": "政府监管直采（gsxt/信用中国/法院/巨潮公告）",
+      "B": "商业数据 API（天眼查/企查查），与官方源交叉一致可升 A",
+      "C": "权威财经媒体，两家以上独立一致可升 B",
+      "D": "一般媒体/自媒体，仅作线索，不进评分卡",
+      "X": "LLM 推断，禁止进入评分卡"
+    },
+    "allowed_domains": [
+      "static.cninfo.com.cn", "www.lixin.gov.cn", "ggzy.bozhou.gov.cn",
+      "wap.stockstar.com", "4g.stockstar.com", "news.qcc.com",
+      "paper.cnstock.com", "m.zqrb.cn"
+    ],
+    "object_identifiers": {
+      "name": "浙江伟星新型建材股份有限公司",
+      "uscc": "91330000719525019T",
+      "stock_code": "002372"
+    },
+    "dimension": {
+      "dimension": "finance",
+      "fact_types": ["finance"],
+      "weight": 0.25
+    },
+    "rubric": "证据≥2条且等级≥B可给risk/positive；1条且等级≤C只给neutral或insufficient；无证据必须insufficient；媒体测算值不得作为事实结论。",
+    "conflict_report": {},
+    "priority": ["source_grade", "confidence", "recency", "reasoning_steps_desc"],
+    "chapter_spec": [
+      {"seq": 1, "title": "工商与股权", "block_type": "paragraph", "max_chars": 1200},
+      {"seq": 2, "title": "高管与任职", "block_type": "paragraph", "max_chars": 1000},
+      {"seq": 3, "title": "涉诉与处罚", "block_type": "paragraph", "max_chars": 1000},
+      {"seq": 4, "title": "财务表现", "block_type": "paragraph", "max_chars": 1600},
+      {"seq": 5, "title": "招投标与业务", "block_type": "paragraph", "max_chars": 1000},
+      {"seq": 6, "title": "舆情观察", "block_type": "paragraph", "max_chars": 800},
+      {"seq": 11, "title": "合规声明", "block_type": "paragraph", "max_chars": 300}
+    ],
+    "scorecard": {
+      "dimensions": {
+        "registration": 82,
+        "executive": 75,
+        "legal": 55,
+        "finance": 68,
+        "bid": 70,
+        "sentiment": 60
+      },
+      "note": "示例评分，仅用于模板渲染，不代表投资建议"
+    },
+    "compliance_note": "本报告基于公开信息整理，不构成投资建议。报告中的媒体测算值已标注为[分析意见]，不构成事实结论。",
+    "review_scope": {"blocks": "all", "strict": true},
+    "deterministic_findings": []
+  },
+  "dimensions": [
+    {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2, "required": true},
+    {"dimension": "executive", "fact_types": ["exec_change"], "weight": 0.15, "required": true},
+    {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.25, "required": true},
+    {"dimension": "finance", "fact_types": ["finance"], "weight": 0.25, "required": true},
+    {"dimension": "bid", "fact_types": ["bid"], "weight": 0.1, "required": true},
+    {"dimension": "sentiment", "fact_types": ["sentiment"], "weight": 0.05, "required": false}
+  ],
+  "evidence": [
+    {
+      "evidence_id": "E01", "object_id": 1,
+      "fact": "公司中文名称为浙江伟星新型建材股份有限公司，中文简称为伟星新材。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "公司的中文名称 浙江伟星新型建材股份有限公司 公司的中文简称 伟星新材",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E02", "object_id": 1,
+      "fact": "公司统一社会信用代码为91330000719525019T。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "公司现持有统一社会信用代码为91330000719525019T 的营业执照",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E03", "object_id": 1,
+      "fact": "公司法定代表人为金红阳。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "公司的法定代表人 金红阳",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E04", "object_id": 1,
+      "fact": "公司注册地址为浙江省临海经济开发区。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "注册地址 浙江省临海经济开发区",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E05", "object_id": 1,
+      "fact": "截至2025年12月31日，公司注册资本1,592,037,988.00元，股份总数1,592,037,988股。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "截至2025 年12 月31 日，公司注册资本1,592,037,988.00 元，股份总数1,592,037,988 股",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E06", "object_id": 1,
+      "fact": "公司主营中高档新型塑料管道、防水材料、净水设备的制造与销售。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "主要经营活动为从事各类中高档新型塑料管道、防水材料、净水设备的制造与销售",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E07", "object_id": 1,
+      "fact": "伟星集团有限公司持股37.90%，报告期末持股603,359,564股，其中质押248,082,400股。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "伟星集团有限公司境内非国有法人 37.90% 603,359,564 0 0 603,359,564 质押 248,082,400",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E08", "object_id": 1,
+      "fact": "临海慧星集团有限公司持股14.68%，质押80,000,000股。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "临海慧星集团有限公司 境内非国有法人 14.68% 233,660,000 0 0 233,660,000 质押 80,000,000",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E09", "object_id": 1,
+      "fact": "章卡鹏直接持股5.18%，张三云直接持股1.96%。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "章卡鹏 境内自然人 5.18% 82,538,434 0 61,903,825 20,634,609 不适用 0 张三云 境内自然人 1.96% 31,269,218",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E10", "object_id": 1,
+      "fact": "公司实际控制人为章卡鹏、张三云，均为中国国籍。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "实际控制人姓名 与实际控制人关系 国籍 是否取得其他国家或地区居留权 章卡鹏 本人 中国 否 张三云 本人 中国 否",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E11", "object_id": 1,
+      "fact": "报告期内公司实际控制人未发生变更。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "公司报告期实际控制人未发生变更。",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E12", "object_id": 1,
+      "fact": "公司以自有资金1,600.00万元收购浙江可瑞40%股权。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·公告2026-029",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-12/1225469011.PDF",
+      "quote": "以自有资金1,600.00 万元向黄晓东收购其持有的浙江可瑞40%的股权",
+      "published_at": "2026-08-12T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "公司公告原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E13", "object_id": 1,
+      "fact": "浙江可瑞注册资本4,000万元，统一社会信用代码91330206MA7B56D224。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·公告2026-029",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-12/1225469011.PDF",
+      "quote": "注册资本：4,000万元人民币 统一社会信用代码：91330206MA7B56D224",
+      "published_at": "2026-08-12T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "公司公告原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E14", "object_id": 1,
+      "fact": "收购完成后公司认缴浙江可瑞4,000万元，持股100%。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·公告2026-029",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-12/1225469011.PDF",
+      "quote": "公司认缴出资金额4,000万元，占比100%",
+      "published_at": "2026-08-12T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "公司公告原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E15", "object_id": 1,
+      "fact": "注销回购股份后，公司总股本由1,592,037,988股减少至1,571,867,988股，注册资本同步减少。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·公告2026-033",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-10-27/1225624464.PDF",
+      "quote": "本次注销完成后，公司总股本将从1,592,037,988股减少至1,571,867,988股，注册资本将从1,592,037,988元减少至1,571,867,988元。",
+      "published_at": "2026-10-27T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "公司公告原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E16", "object_id": 1,
+      "fact": "2025年度权益分派以1,571,867,988股为基数，每10股派发现金红利3.50元（含税）。",
+      "fact_type": "registration", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年度权益分派实施公告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-28/1225204223.PDF",
+      "quote": "以现有总股本剔除回购股份20,170,000股后的1,571,867,988股为基数，向全体股东每10股派发现金红利3.50元(含税)",
+      "published_at": "2026-04-28T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "公司公告原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E17", "object_id": 1,
+      "fact": "金红阳任公司董事长，工商管理硕士、正高级经济师。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "金红阳 董事长 工商管理硕士，正高级经济师，具有30 多年的企业决策和经营管理经验，曾任公司总经理",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E18", "object_id": 1,
+      "fact": "施国军任公司副董事长、总经理。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "施国军 副董事长、总经理 有机化工本科学历",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E19", "object_id": 1,
+      "fact": "谭梅任公司董事、董事会秘书兼副总经理。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "谭梅 董事、董秘兼副总经理 工商管理硕士研究生",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E20", "object_id": 1,
+      "fact": "陈安门任公司财务总监。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "陈安门 财务总监 审计学本科学历",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E21", "object_id": 1,
+      "fact": "董事长金红阳2025年从公司获得的税前报酬总额为195.00万元。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "金红阳 男 60 董事长 现任 195.00 否",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E22", "object_id": 1,
+      "fact": "总经理施国军2025年从公司获得的税前报酬总额为131.34万元。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "施国军 男 55 副董事长、总经理 现任 131.34 否",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E23", "object_id": 1,
+      "fact": "金红阳于2026年6月24日增持公司股份100万股，占总股本0.06%。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·公告2026-022",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-06-25/1225385000.PDF",
+      "quote": "于2026 年6 月24 日以自有资金通过深圳证券交易所（以下简称“深交所”）交易系统以集中竞价方式增持公司股份100 万股，占公司总股本的0.06%",
+      "published_at": "2026-06-25T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "公司公告原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E24", "object_id": 1,
+      "fact": "金红阳增持均价8.40元/股，增持后持股18,563,013股、比例1.17%。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·公告2026-022",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-06-25/1225385000.PDF",
+      "quote": "金红阳 17,563,013 1.10% 1,000,000 0.06% 8.40 18,563,013 1.17%",
+      "published_at": "2026-06-25T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "公司公告原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E25", "object_id": 1,
+      "fact": "副总经理洪义华于2025年7月31日因退休解聘。",
+      "fact_type": "exec_change", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "洪义华 副总经理 解聘 2025 年7 月31 日 退休",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E26", "object_id": 1,
+      "fact": "公司存在多起拖欠货款纠纷，涉案金额2,371.93万元，部分待开庭、部分待判决、部分判决生效。",
+      "fact_type": "litigation", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "多起拖欠本公司货款等纠纷 2,371.93 否 部分待开庭、部分待判决、部分判决生效，部分调解，部分执行中",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E27", "object_id": 1,
+      "fact": "上述货款纠纷判决和调解由本公司获支付2,221.73万元，已累计收到430.04万元。",
+      "fact_type": "litigation", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "判决和调解支付 本公司 2,221.73 万元 货款及相关违约金、利息等 已累计收到支付款430.04 万元，其余执行或强制执行中",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E28", "object_id": 1,
+      "fact": "另有财产损害、劳动等纠纷涉案462.45万元。",
+      "fact_type": "litigation", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "财产损害、劳动等纠纷 462.45 否 部分待开庭、部分待判决或裁决、部分调解，部分驳回诉求",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E29", "object_id": 1,
+      "fact": "2025年度报告期内公司不存在处罚及整改情况。",
+      "fact_type": "penalty", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "公司报告期不存在处罚及整改情况。",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E30", "object_id": 1,
+      "fact": "公司董事、高管近三年证券监管机构处罚情况为不适用。",
+      "fact_type": "penalty", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "公司现任及报告期内离任董事和高级管理人员近三年证券监管机构处罚的情况 □适用√不适用",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E31", "object_id": 1,
+      "fact": "2025年营业收入5,381,991,829.02元，同比下降14.12%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "2025 年 2024 年 本年比上年增减 2023 年 营业收入（元） 5,381,991,829.02 6,266,592,379.40 -14.12%",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E32", "object_id": 1,
+      "fact": "2025年归母净利润740,777,487.24元，同比下降22.24%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "归属于上市公司股东的净利润（元） 740,777,487.24 952,671,657.36 -22.24%",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E33", "object_id": 1,
+      "fact": "2025年扣非净利润684,311,685.47元，同比下降25.37%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "归属于上市公司股东的扣除非经常性损益的净利润（元）684,311,685.47 916,905,859.02 -25.37%",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E34", "object_id": 1,
+      "fact": "2025年经营活动现金流量净额1,178,385,378.88元，同比增长2.70%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "经营活动产生的现金流量净额（元） 1,178,385,378.88 1,147,417,005.10 2.70%",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E35", "object_id": 1,
+      "fact": "2025年加权平均净资产收益率14.90%，较上年下降3.21个百分点。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "加权平均净资产收益率 14.90% 18.11% -3.21%",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E36", "object_id": 1,
+      "fact": "2025年末总资产6,392,574,863.06元。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "总资产（元） 6,392,574,863.06 6,631,662,560.69 -3.61%",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E37", "object_id": 1,
+      "fact": "2025年末归属于上市公司股东的净资产4,885,254,164.47元。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2025年年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-04-03/1225076292.PDF",
+      "quote": "归属于上市公司股东的净资产（元） 4,885,254,164.47 5,092,913,572.50 -4.08%",
+      "published_at": "2026-04-03T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E38", "object_id": 1,
+      "fact": "2026年上半年营业收入1,896,696,234.30元，同比下降8.71%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2026年半年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-07/1225462208.PDF",
+      "quote": "营业收入（元） 1,896,696,234.30 2,077,733,370.22 -8.71%",
+      "published_at": "2026-08-07T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的半年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E39", "object_id": 1,
+      "fact": "2026年上半年归母净利润390,008,387.82元，同比增长43.90%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2026年半年度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-08-07/1225462208.PDF",
+      "quote": "归属于上市公司股东的净利润（元） 390,008,387.82 271,020,926.82 43.90%",
+      "published_at": "2026-08-07T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的半年报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E40", "object_id": 1,
+      "fact": "2026年前三季度营业收入3,118,261,121.72元，同比下降7.38%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2026年第三季度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-10-27/1225624486.PDF",
+      "quote": "营业收入（元） 1,221,564,887.42 -5.24% 3,118,261,121.72 -7.38%",
+      "published_at": "2026-10-27T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的三季报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E41", "object_id": 1,
+      "fact": "2026年前三季度归母净利润539,576,131.96元，同比上升0.01%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2026年第三季度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-10-27/1225624486.PDF",
+      "quote": "归属于上市公司股东的净利润（元） 149,567,744.14 -44.30% 539,576,131.96 0.01%",
+      "published_at": "2026-10-27T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的三季报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E42", "object_id": 1,
+      "fact": "2026年第三季度归母净利润同比下降44.30%，主要系东鹏合立投资收益减少。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "巨潮资讯网·2026年第三季度报告",
+      "source_url": "https://static.cninfo.com.cn/finalpage/2026-10-27/1225624486.PDF",
+      "quote": "本报告期归属于上市公司股东的净利润、基本每股收益及稀释每股收益较上年同期分别下降44.30%、41.18%、41.18%，主要系本报告期投资宁波东鹏合立股权投资合伙企业（有限合伙）（以下简称“东鹏合立”）取得的投资收益减少所致。",
+      "published_at": "2026-10-27T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 95, "confidence_reason": "巨潮资讯网披露的三季报原文", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E43", "object_id": 1,
+      "fact": "利辛县管材采购项目合同乙方为公司，合同金额6,797,777.00元，期限180天。",
+      "fact_type": "bid", "source_type": "news",
+      "source_name": "利辛县人民政府·合同订立信息",
+      "source_url": "https://www.lixin.gov.cn/Jcsd/show/2998305.html",
+      "quote": "合同乙方 浙江伟星新型建材股份有限公司 所属行业 工程招标 合同金额 6797777.00000 金额单位 元 合同期限 180天",
+      "published_at": "2026-06-30T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 92, "confidence_reason": "县级公共资源交易合同公开页", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E44", "object_id": 1,
+      "fact": "杭州市临安区PE管及配件采购项目由公司中标，金额481,112.85元。",
+      "fact_type": "bid", "source_type": "tianyancha",
+      "source_name": "证券之星招标公示（数据来源：天眼查）",
+      "source_url": "https://wap.stockstar.com/detail/RB2026080600018334",
+      "quote": "供应商：浙江伟星新型建材股份有限公司 中标金额：481112.85",
+      "published_at": "2026-08-06T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 75, "confidence_reason": "商业数据平台整理，未取得原始中标公告", "source_grade": "B",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E45", "object_id": 1,
+      "fact": "南京浦口PPR管材采购项目由公司中标，金额373,980.95元。",
+      "fact_type": "bid", "source_type": "tianyancha",
+      "source_name": "证券之星招标公示（数据来源：天眼查）",
+      "source_url": "https://wap.stockstar.com/detail/RB2026052900020740",
+      "quote": "供应商：浙江伟星新型建材股份有限公司 中标金额：373980.95",
+      "published_at": "2026-05-29T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 75, "confidence_reason": "商业数据平台整理，未取得原始中标公告", "source_grade": "B",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E46", "object_id": 1,
+      "fact": "含山县城乡供水项目由公司中标，金额1,325,842.11元。",
+      "fact_type": "bid", "source_type": "tianyancha",
+      "source_name": "证券之星招标公示（数据来源：天眼查）",
+      "source_url": "https://wap.stockstar.com/detail/RB2026062700007931",
+      "quote": "供应商：浙江伟星新型建材股份有限公司 中标金额：1325842.11",
+      "published_at": "2026-06-27T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 75, "confidence_reason": "商业数据平台整理，未取得原始中标公告", "source_grade": "B",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E47", "object_id": 1,
+      "fact": "截至2026年8月，公司参与招投标项目2153次，拥有商标509条、专利665条。",
+      "fact_type": "ip", "source_type": "tianyancha",
+      "source_name": "证券之星招标公示（数据来源：天眼查）",
+      "source_url": "https://wap.stockstar.com/detail/RB2026080600018334",
+      "quote": "参与招投标项目2153次；财产线索方面有商标信息509条，专利信息665条，著作权信息25条",
+      "published_at": "2026-08-06T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 65, "confidence_reason": "天眼查统计口径，未经官方知识产权库复核", "source_grade": "B",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E48", "object_id": 1,
+      "fact": "媒体测算2026年前三季度毛利率41.83%，同比提高0.85个百分点；净利率17.25%。",
+      "fact_type": "sentiment", "source_type": "news",
+      "source_name": "证券之星·AI财报",
+      "source_url": "https://wap.stockstar.com/detail/RB2026102800009363",
+      "quote": "本期毛利率为41.83%，同比增幅0.85个百分点；净利率为17.25%，同比增幅7.67个百分点。",
+      "published_at": "2026-10-28T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 70, "confidence_reason": "媒体AI模型测算，非公司披露口径", "source_grade": "C",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E49", "object_id": 1,
+      "fact": "董事长增持公告披露当日，公司股价报收8.37元，下跌2.45%。",
+      "fact_type": "sentiment", "source_type": "news",
+      "source_name": "证券之星·个股动态",
+      "source_url": "https://4g.stockstar.com/detail/RB2026062400033560",
+      "quote": "报收于8.37元，较前一交易日下跌2.45%",
+      "published_at": "2026-06-24T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 65, "confidence_reason": "媒体行情记录，未与交易所行情复核", "source_grade": "C",
+      "collected_by": "collector", "verify_status": "auto"
+    },
+    {
+      "evidence_id": "E50", "object_id": 1,
+      "fact": "2026年上半年净利润增长主要来自东鹏合立投资收益12,496.61万元及收购北京松田程科技股权利得2,688.06万元。",
+      "fact_type": "sentiment", "source_type": "news",
+      "source_name": "上海证券报·2026年半年度报告摘要",
+      "source_url": "https://paper.cnstock.com/html/2026-08/07/content_2252683.htm",
+      "quote": "主要系本期确认对宁波东鹏合立股权投资合伙企业（有限合伙）的投资收益12,496.61万元，以及收购北京松田程科技有限公司股权产生的利得2,688.06万元等非经常性损益所致。",
+      "published_at": "2026-08-07T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 80, "confidence_reason": "权威财经媒体转载年报摘要", "source_grade": "C",
+      "collected_by": "collector", "verify_status": "auto"
+    }
+  ],
+  "analyses": [],
+  "golden": {
+    "expected_status": "pass",
+    "must_include": [
+      "91330000719525019T",
+      "伟星集团有限公司",
+      "37.90%",
+      "章卡鹏",
+      "金红阳",
+      "195.00万元",
+      "100万股",
+      "2,371.93万元",
+      "430.04万元",
+      "不存在处罚及整改情况",
+      "5,381,991,829.02",
+      "740,777,487.24",
+      "1,896,696,234.30",
+      "390,008,387.82",
+      "539,576,131.96",
+      "6,797,777.00",
+      "481,112.85",
+      "1,325,842.11",
+      "1,600.00万元",
+      "1,571,867,988",
+      "44.30%",
+      "数据缺失"
+    ],
+    "must_not_include": [
+      "不存在任何诉讼",
+      "公司无诉讼",
+      "实际控制人为伟星集团",
+      "营业收入同比增长",
+      "第三季度净利润同比增长44.30%",
+      "已被行政处罚",
+      "控股股东质押比例超过80%",
+      "增持后持股比例1.10%",
+      "2025年净利润14.32亿元",
+      "中标金额合计1亿元"
+    ],
+    "expected_analysis": [
+      {"dimension": "registration", "polarity": "neutral", "must_cite": ["E02", "E07", "E10"], "missing_data": []},
+      {"dimension": "executive", "polarity": "positive", "must_cite": ["E17", "E23"], "missing_data": []},
+      {"dimension": "legal", "polarity": "risk", "must_cite": ["E26", "E27"], "missing_data": ["逐案判决文书未获取"]},
+      {"dimension": "finance", "polarity": "neutral", "must_cite": ["E31", "E40"], "missing_data": ["2026年全年业绩未获取"]},
+      {"dimension": "bid", "polarity": "positive", "must_cite": ["E43", "E44"], "missing_data": ["部分中标未取得原始公告"]},
+      {"dimension": "sentiment", "polarity": "neutral", "must_cite": ["E48", "E49"], "missing_data": ["第三方情感分布未获取"]}
+    ],
+    "expected_gates": [
+      {"gate": "citation", "expected": "pass"},
+      {"gate": "number", "expected": "pass"},
+      {"gate": "entity", "expected": "pass"},
+      {"gate": "coverage", "expected": "6/6"},
+      {"gate": "quote", "expected": "partial"}
+    ],
+    "scoring": {
+      "fact_accuracy_target": 0.95,
+      "citation_compliance_target": 1.0,
+      "coverage_target": 1.0,
+      "hallucination_rate_target": 0.0,
+      "quote_verifiable_target": 1.0,
+      "note": "真实案例未落地 core.evidence_raw，quote 二级校验只能标 partial；覆盖率按有证据的维度计。"
+    },
+    "sample_answer_md": "## 一、工商与股权\n\n公司中文名称为浙江伟星新型建材股份有限公司，中文简称为伟星新材（依据 E01）。公司统一社会信用代码为91330000719525019T（依据 E02），法定代表人为金红阳（依据 E03），注册地址为浙江省临海经济开发区（依据 E04）。截至2025年12月31日，公司注册资本1,592,037,988.00元，股份总数1,592,037,988股（依据 E05）。\n\n公司主营中高档新型塑料管道、防水材料、净水设备的制造与销售（依据 E06）。控股股东为伟星集团有限公司，持股37.90%，报告期末持股603,359,564股，其中质押248,082,400股（依据 E07）。第二大股东临海慧星集团有限公司持股14.68%，质押80,000,000股（依据 E08）。章卡鹏、张三云分别直接持股5.18%、1.96%（依据 E09）。公司实际控制人为章卡鹏、张三云，均为中国国籍（依据 E10），报告期内未发生变更（依据 E11）。\n\n公司以自有资金1,600.00万元收购浙江可瑞40%股权（依据 E12）；标的注册资本4,000万元，统一社会信用代码91330206MA7B56D224（依据 E13）；收购后公司认缴4,000万元、持股100%（依据 E14）。注销回购股份后，公司总股本由1,592,037,988股减少至1,571,867,988股，注册资本同步减少（依据 E15）。权益分派以1,571,867,988股为基数，每10股派发现金红利3.50元（含税）（依据 E16）。\n\n## 二、高管与任职\n\n董事长金红阳为工商管理硕士、正高级经济师（依据 E17）。副董事长、总经理为施国军（依据 E18），董事会秘书为谭梅（依据 E19），财务总监为陈安门（依据 E20）。\n\n董事长金红阳税前报酬195.00万元（依据 E21），总经理施国军税前报酬131.34万元（依据 E22）。金红阳于2026年6月24日增持公司股份100万股，占总股本0.06%（依据 E23）；增持均价8.40元/股，增持后持股18,563,013股、比例1.17%（依据 E24）。副总经理洪义华于2025年7月31日因退休解聘（依据 E25）。\n\n## 三、涉诉与处罚\n\n年报披露多起拖欠货款纠纷，涉案金额2,371.93万元，部分待开庭、部分待判决、部分判决生效（依据 E26）。上述纠纷判决和调解由本公司获支付2,221.73万元，已累计收到430.04万元（依据 E27）。另有财产损害、劳动等纠纷涉案462.45万元（依据 E28）。\n\n报告期内公司不存在处罚及整改情况（依据 E29）；董事、高管近三年证券监管机构处罚情况为不适用（依据 E30）。\n\n## 四、财务表现\n\n### 2025年度\n\n营业收入5,381,991,829.02元，同比下降14.12%（依据 E31）。归母净利润740,777,487.24元，同比下降22.24%（依据 E32）。扣非净利润684,311,685.47元，同比下降25.37%（依据 E33）。经营活动现金流量净额1,178,385,378.88元，同比增长2.70%（依据 E34）。加权平均净资产收益率14.90%，较上年下降3.21个百分点（依据 E35）。年末总资产6,392,574,863.06元（依据 E36），归母净资产4,885,254,164.47元（依据 E37）。\n\n### 2026年上半年\n\n营业收入1,896,696,234.30元，同比下降8.71%（依据 E38）。归母净利润390,008,387.82元，同比增长43.90%（依据 E39）。[分析意见] 该增长主要来自东鹏合立投资收益12,496.61万元及收购北京松田程科技股权利得2,688.06万元，属于非经常性损益，不能视为经营性改善（依据 E50）。\n\n### 2026年前三季度\n\n营业收入3,118,261,121.72元，同比下降7.38%（依据 E40）。归母净利润539,576,131.96元，同比上升0.01%（依据 E41）。第三季度归母净利润同比下降44.30%（依据 E42）。\n\n## 五、招投标与业务\n\n利辛县管材采购项目合同金额6,797,777.00元，期限180天（依据 E43）。临安区PE管及配件采购中标金额481,112.85元（依据 E44）。南京浦口PPR管材采购中标金额373,980.95元（依据 E45）。含山县供水项目中标金额1,325,842.11元（依据 E46）。公司参与招投标项目2153次，拥有商标509条、专利665条（依据 E47）。\n\n## 六、舆情观察\n\n媒体测算毛利率41.83%，同比提高0.85个百分点；净利率17.25%（依据 E48）。增持公告披露当日股价报收8.37元，下跌2.45%（依据 E49）。\n\n【数据缺失】未获取到独立第三方舆情情感分布数据，也未获取到全年业绩数据；相关结论待验证。\n\n## 合规声明\n\n本报告基于公开信息整理，不构成投资建议。报告中的媒体测算值已标注为[分析意见]，不构成事实结论。\n",
+    "bad_sample_md": "## 四、财务表现\n\n归母净利润741,777,487.24元，同比下降22.24%（依据 E32）。\n",
+    "bad_sample_must_fail": ["741,777,487.24"]
+  }
+}

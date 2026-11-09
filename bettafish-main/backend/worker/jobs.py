@@ -280,6 +280,100 @@ def insight_research(ctx: TaskContext, input: dict) -> dict:
     return slim
 
 
+# ====== 数据源接入：证据采集（巨潮/AkShare/天眼查/离线案例 → core.evidence） ======
+
+@register("collect_evidence")
+def collect_evidence(ctx: TaskContext, input: dict) -> dict:
+    """按 input.sources 采集证据并落 core.evidence。
+
+    input:
+    {
+      "sources": ["case_file", "juchao", "akshare", "tianyancha"],  # 至少一个
+      "object_id": 123,            # 可选：已注册对象；缺省时用下面两项现场注册
+      "display_name": "…", "uscc": "…", "display_meta": "…", "aliases": ["简称"],
+      # 源参数（按源透传）：
+      "case_path": ".trae/documents/cases/real_002372_weixing.json",
+      "stock_code": "002372", "max_items": 30, "periods": 3
+    }
+
+    实体对齐 v0：uscc 命中或唯一同名命中才复用对象；同名不同码新建隔离对象。
+    """
+    from ..sources import SOURCE_LABELS, get_source
+    from ..worker import evidence as evidence_store
+    from . import entities
+
+    params = input or {}
+    source_names = params.get("sources") or []
+    if not source_names:
+        raise ValueError("input.sources 不能为空（可选：juchao/akshare/tianyancha/case_file）")
+
+    with ctx.step("resolve_entity"):
+        ctx.set_stage("实体对齐（USCC 主键）", 10)
+        object_id = params.get("object_id")
+        if object_id:
+            from .objects import get_object
+            object_row = get_object(object_id)
+            if object_row is None:
+                raise ValueError(f"对象 {object_id} 不存在")
+        else:
+            display_name = (params.get("display_name") or "").strip()
+            if not display_name:
+                raise ValueError("需提供 object_id 或 display_name（+可选 uscc）")
+            resolution = entities.resolve_company(
+                display_name,
+                uscc=params.get("uscc"),
+                display_meta=params.get("display_meta"),
+                aliases=params.get("aliases"),
+            )
+            object_id = resolution["object_id"]
+            from .objects import get_object
+            object_row = get_object(object_id)
+
+    inserted = 0
+    by_source: dict[str, int] = {}
+    errors: dict[str, str] = {}
+    for i, name in enumerate(source_names):
+        label = SOURCE_LABELS.get(name, name)
+        with ctx.step(f"collect_{name}", {"source": name}):
+            ctx.set_stage(
+                f"采集：{label}（{i + 1}/{len(source_names)}）",
+                10 + int(80 * (i + 1) / (len(source_names) + 1)),
+            )
+            try:
+                adapter = get_source(name)
+                items = adapter.collect(object_row, params)
+                for ev in items:
+                    ev.validate()
+                    evidence_store.insert_evidence(
+                        object_id=object_id,
+                        task_id=ctx.task_id,
+                        fact=ev.fact,
+                        fact_type=ev.fact_type,
+                        source_type=ev.source_type,
+                        source_url=ev.source_url,
+                        quote=ev.quote,
+                        source_name=ev.source_name,
+                        value_json=ev.value_json,
+                        published_at=ev.published_at,
+                        confidence=ev.confidence,
+                        confidence_reason=ev.confidence_reason,
+                    )
+                by_source[name] = len(items)
+                inserted += len(items)
+            except Exception as e:
+                # 单源失败不中断整单（如天眼查额度用尽），错误落 task_step 供排查
+                errors[name] = str(e)
+                logger.warning(f"[task {ctx.task_id}] 数据源 {name} 采集失败：{e}")
+
+    ctx.set_stage("完成", 100)
+    return {
+        "object_id": object_id,
+        "inserted": inserted,
+        "by_source": by_source,
+        "errors": errors,
+    }
+
+
 # ====== 引擎接入：投资尽调（评分卡 + 12 章模板 + 证据后校验） ======
 # 延迟导入触发 @register 注册（dd 模块轻量，无重依赖）
 from ..dd import pipeline as _dd_pipeline  # noqa: E402, F401

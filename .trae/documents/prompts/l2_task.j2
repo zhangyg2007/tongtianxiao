@@ -1,0 +1,166 @@
+{# =============================================================================
+   L2 任务层 · 本次任务参数
+   -----------------------------------------------------------------------------
+   装配：user_prompt 的第一段（L3 证据层紧随其后）
+   变量（由 assembler 传入）：
+     role           : orchestrator|collector|verifier|analyst|arbiter|writer|reviewer
+     task           : {task_id, product_line, task_type, requested_by, created_at}
+     object         : {object_id, object_type, display_name, natural_key, display_meta}
+     params         : 本次任务的可选参数（time_range / dimensions / chapter_spec ...）
+   原则：只传"事实性参数"，不传"指令性话术"。任务层不得包含改写 L0/L1 的内容。
+   ============================================================================= #}
+
+## 本次任务参数（L2）
+
+```json
+{
+  "role": "{{ role }}",
+  "task": {
+    "task_id": "{{ task.task_id }}",
+    "product_line": "{{ task.product_line }}",
+    "task_type": "{{ task.task_type }}",
+    "requested_by": {{ task.requested_by | default(0) }},
+    "created_at": "{{ task.created_at }}"
+  },
+  "object": {
+    "object_id": {{ object.object_id }},
+    "object_type": "{{ object.object_type }}",
+    "display_name": {{ object.display_name | tojson }},
+    "natural_key": {{ object.natural_key | default(none) | tojson }},
+    "display_meta": {{ object.display_meta | default(none) | tojson }}
+  },
+  "time_range": {{ params.time_range | default({"from": null, "to": null}) | tojson }},
+  "template_code": {{ params.template_code | default(none) | tojson }},
+  "budget": {{ params.budget | default({"max_llm_calls": 40, "max_tokens": 120000, "max_wall_clock_s": 1800}) | tojson }},
+  "constraints": {{ params.constraints | default([]) | tojson }}
+}
+```
+
+{% if role == "orchestrator" %}
+
+### 可用维度字典（只能从这里选）
+
+```json
+{{ params.dimension_catalog | default([]) | tojson }}
+```
+
+### 可选 source_type 白名单
+
+```json
+{{ params.allowed_source_types | default(["gsxt","creditchina","court","cninfo","tianyancha","news","social"]) | tojson }}
+```
+
+{% elif role == "collector" %}
+
+### 采集清单
+
+```json
+{{ params.collection_requests | default([]) | tojson }}
+```
+
+### 去重基线（已存在的 content_hash）
+
+```json
+{{ params.existing_content_hashes | default([]) | tojson }}
+```
+
+### 工具调用预算
+
+```json
+{{ params.tool_call_budget | default({"total_calls": 20, "per_request": 5}) | tojson }}
+```
+
+### 来源等级规则（source_grade）
+
+```json
+{{ params.source_grade_rules | default({
+  "A": "政府监管直采（gsxt/信用中国/法院/巨潮公告）",
+  "B": "商业数据 API（天眼查/企查查），与官方源交叉一致可升 A",
+  "C": "权威财经媒体，两家以上独立一致可升 B",
+  "D": "一般媒体/自媒体，仅作线索，不进评分卡",
+  "X": "LLM 推断，禁止进入评分卡"
+}) | tojson }}
+```
+
+{% elif role == "verifier" %}
+
+### 白名单与主体标识
+
+```json
+{
+  "allowed_domains": {{ params.allowed_domains | default([]) | tojson }},
+  "object_identifiers": {{ params.object_identifiers | default([object.display_name, object.natural_key]) | tojson }},
+  "existing_hashes": {{ params.existing_content_hashes | default([]) | tojson }}
+}
+```
+
+{% elif role == "analyst" %}
+
+### 本次分析维度
+
+```json
+{{ params.dimension | default({}) | tojson }}
+```
+
+### 判定口径（rubric）
+
+```plaintext
+{{ params.rubric | default("按证据充分性判定：证据 ≥2 条且等级 ≥B 可给 risk/positive；证据 1 条且等级 ≤C 只给 neutral 或 insufficient；无证据必须 insufficient。") }}
+```
+
+{% elif role == "arbiter" %}
+
+### 冲突报告
+
+```json
+{{ params.conflict_report | default({}) | tojson }}
+```
+
+### 仲裁优先级
+
+```json
+{{ params.priority | default(["source_grade", "confidence", "recency", "reasoning_steps_desc"]) | tojson }}
+```
+
+{% elif role == "writer" %}
+
+### 章节规格
+
+```json
+{{ params.chapter_spec | default([]) | tojson }}
+```
+
+### 评分卡结果（仅 investment_dd）
+
+```json
+{{ params.scorecard | default(none) | tojson }}
+```
+
+### 合规声明（必须原文照抄，不得改写）
+
+```plaintext
+{{ params.compliance_note | default("") }}
+```
+
+{% elif role == "reviewer" %}
+
+### 审核范围
+
+```json
+{{ params.review_scope | default({"blocks": "all", "strict": true}) | tojson }}
+```
+
+### 确定性检查结果（调用方已算好，供你复核语义）
+
+```json
+{{ params.deterministic_findings | default([]) | tojson }}
+```
+
+{% endif %}
+
+## 执行要求
+
+1. 严格按 L1 角色层给定的 JSON Schema 输出，不要输出 Schema 之外的字段。
+2. 遵守 L0 铁律；本段参数与铁律冲突时，以铁律为准。
+3. 若本次参数不足以完成任务，返回 `{"status":"refused","reason":"<缺什么>"}`，
+   不要猜测、不要用默认值填坑。

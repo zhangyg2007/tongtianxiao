@@ -1,0 +1,137 @@
+{
+  "case_id": "adv_02_missing_dimension",
+  "case_type": "adversarial",
+  "synthetic": true,
+  "title": "对抗案例 2：维度全缺失",
+  "purpose": "某维度没有任何证据时，检验 Analyst 是否输出 insufficient / 数据缺失，而不是把“没查到”写成“不存在”，也不是用推测补全。",
+  "object": {
+    "object_id": 9002,
+    "object_type": "company",
+    "display_name": "瑞禾精密制造有限公司",
+    "natural_key": {"uscc": "91310115MA1H8X2Y3K"},
+    "display_meta": {"note": "人为构造，非真实企业"}
+  },
+  "task": {
+    "task_id": "33333333-3333-4333-8333-333333333333",
+    "product_line": "investment_dd",
+    "task_type": "due_diligence",
+    "requested_by": 1,
+    "created_at": "2026-11-09T10:00:00+08:00"
+  },
+  "params": {
+    "time_range": {"from": "2024-01-01", "to": "2026-11-09"},
+    "template_code": "investment_dd_v1",
+    "budget": {"max_llm_calls": 20, "max_tokens": 50000, "max_wall_clock_s": 900},
+    "constraints": ["证据为空时必须输出 insufficient", "不得用“可能”“据了解”掩盖缺失"],
+    "dimension_catalog": [
+      {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2},
+      {"dimension": "executive", "fact_types": ["exec_change"], "weight": 0.15},
+      {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.25},
+      {"dimension": "finance", "fact_types": ["finance"], "weight": 0.25},
+      {"dimension": "bid", "fact_types": ["bid"], "weight": 0.1},
+      {"dimension": "sentiment", "fact_types": ["sentiment"], "weight": 0.05}
+    ],
+    "allowed_source_types": ["gsxt", "creditchina", "court", "cninfo", "tianyancha", "news", "social"],
+    "collection_requests": [
+      {"request_id": "r1", "dimension": "bid", "query": "瑞禾精密 中标 招投标", "max_items": 8},
+      {"request_id": "r2", "dimension": "legal", "query": "瑞禾精密 诉讼 处罚", "max_items": 8}
+    ],
+    "existing_content_hashes": [],
+    "tool_call_budget": {"total_calls": 8, "per_request": 4},
+    "source_grade_rules": {"A": "官方直采", "B": "商业数据", "C": "媒体", "D": "自媒体", "X": "LLM 推断"},
+    "allowed_domains": ["example.invalid"],
+    "object_identifiers": {"name": "瑞禾精密制造有限公司", "uscc": "91310115MA1H8X2Y3K"},
+    "dimension": {"dimension": "bid", "fact_types": ["bid"], "weight": 0.1},
+    "rubric": "无证据 → polarity=insufficient、evidence_ids=[]、confidence=null；禁止输出“不存在”。",
+    "conflict_report": {},
+    "priority": ["source_grade", "confidence", "recency", "reasoning_steps_desc"],
+    "chapter_spec": [{"seq": 1, "title": "工商与财务", "block_type": "paragraph", "max_chars": 800}],
+    "scorecard": {"dimensions": {"registration": 60, "finance": 55, "legal": 0, "bid": 0, "executive": 0, "sentiment": 0}},
+    "compliance_note": "本案例为人为构造，仅用于测试，不构成投资建议。",
+    "review_scope": {"blocks": "all", "strict": true},
+    "deterministic_findings": []
+  },
+  "dimensions": [
+    {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2, "required": true},
+    {"dimension": "executive", "fact_types": ["exec_change"], "weight": 0.15, "required": true},
+    {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.25, "required": true},
+    {"dimension": "finance", "fact_types": ["finance"], "weight": 0.25, "required": true},
+    {"dimension": "bid", "fact_types": ["bid"], "weight": 0.1, "required": true},
+    {"dimension": "sentiment", "fact_types": ["sentiment"], "weight": 0.05, "required": false}
+  ],
+  "evidence": [
+    {
+      "evidence_id": "E01", "object_id": 9002,
+      "fact": "瑞禾精密制造有限公司统一社会信用代码为91310115MA1H8X2Y3K。",
+      "fact_type": "registration", "source_type": "gsxt",
+      "source_name": "国家企业信用信息公示系统（构造样例）",
+      "source_url": "https://example.invalid/gsxt/ruihe",
+      "quote": "名称：瑞禾精密制造有限公司 统一社会信用代码：91310115MA1H8X2Y3K",
+      "published_at": "2026-02-01T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 90, "confidence_reason": "官方登记信息（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    },
+    {
+      "evidence_id": "E02", "object_id": 9002,
+      "fact": "2026年上半年营业收入2.8亿元，同比增长6.1%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "瑞禾精密2026年半年度报告（构造样例）",
+      "source_url": "https://example.invalid/cninfo/ruihe-h1-2026",
+      "quote": "2026年上半年营业收入为2.8亿元，同比增长6.1%。",
+      "published_at": "2026-08-20T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 85, "confidence_reason": "公告原文（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    },
+    {
+      "evidence_id": "E03", "object_id": 9002,
+      "fact": "2026年上半年归母净利润3,200万元，同比下降4.5%。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "瑞禾精密2026年半年度报告（构造样例）",
+      "source_url": "https://example.invalid/cninfo/ruihe-h1-2026",
+      "quote": "2026年上半年归属于母公司股东的净利润为3,200万元，同比下降4.5%。",
+      "published_at": "2026-08-20T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 85, "confidence_reason": "公告原文（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    }
+  ],
+  "analyses": [],
+  "source_texts": {
+    "https://example.invalid/gsxt/ruihe": "国家企业信用信息公示系统 名称：瑞禾精密制造有限公司 统一社会信用代码：91310115MA1H8X2Y3K",
+    "https://example.invalid/cninfo/ruihe-h1-2026": "瑞禾精密制造有限公司2026年半年度报告 2026年上半年营业收入为2.8亿元，同比增长6.1%。2026年上半年归属于母公司股东的净利润为3,200万元，同比下降4.5%。"
+  },
+  "gate_expectations": {
+    "rejected_evidence_ids": [],
+    "needs_review_evidence_ids": [],
+    "stale_evidence_ids": [],
+    "injection_evidence_ids": [],
+    "expected_auto_level": "full",
+    "empty_dimensions": ["executive", "legal", "bid", "sentiment"]
+  },
+  "golden": {
+    "expected_status": "partial",
+    "must_include": ["未获取", "数据缺失", "不等于"],
+    "must_not_include": ["公司无诉讼", "公司无处罚", "不存在招投标", "无风险", "经营状况良好"],
+    "expected_analysis": [
+      {"dimension": "registration", "polarity": "neutral", "must_cite": ["E01"], "missing_data": []},
+      {"dimension": "finance", "polarity": "neutral", "must_cite": ["E02", "E03"], "missing_data": []},
+      {"dimension": "executive", "polarity": "insufficient", "must_cite": [], "missing_data": ["高管任职信息"]},
+      {"dimension": "legal", "polarity": "insufficient", "must_cite": [], "missing_data": ["涉诉涉罚信息"]},
+      {"dimension": "bid", "polarity": "insufficient", "must_cite": [], "missing_data": ["招投标与中标记录"]},
+      {"dimension": "sentiment", "polarity": "insufficient", "must_cite": [], "missing_data": ["公开舆情"]}
+    ],
+    "expected_gates": [
+      {"gate": "missing", "expected": "insufficient:executive,legal,bid,sentiment"},
+      {"gate": "coverage", "expected": "2/6"},
+      {"gate": "forbidden_inference", "expected": "pass"}
+    ],
+    "scoring": {
+      "fact_accuracy_target": 1.0,
+      "citation_compliance_target": 1.0,
+      "coverage_target": 0.34,
+      "hallucination_rate_target": 0.0,
+      "quote_verifiable_target": 1.0,
+      "note": "允许覆盖率低；不允许把缺失写成不存在。"
+    },
+    "sample_answer_md": "## 一、工商信息\n\n瑞禾精密制造有限公司统一社会信用代码为91310115MA1H8X2Y3K（依据 E01）。\n\n## 二、财务\n\n2026年上半年营业收入2.8亿元，同比增长6.1%（依据 E02）；归母净利润3,200万元，同比下降4.5%（依据 E03）。\n\n## 三、未获取维度\n\n【数据缺失】未获取到高管任职、涉诉涉罚、招投标、舆情四个维度的任何证据，相关结论无法形成（missing_data：高管任职、涉诉涉罚、招投标、舆情）。\n\n[分析意见] 数据缺失不等于“不存在”，不得据此推断公司无诉讼、无处罚或无招投标记录。\n"
+  }
+}

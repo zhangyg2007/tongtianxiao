@@ -16,12 +16,21 @@ TEMPLATE_CODE = "investment_dd_v1"
 #   "summary"  = 第 1 章，由评分卡结果生成
 #   "verdict"  = 第 11 章，由覆盖率规则生成
 #   "appendix" = 第 12 章，由证据列表生成
-#   其余章节按 fact_types 从 core.evidence 取事实填充；
-#   fact_types 为空 = 该章数据源 P0 未接入，固定输出【数据不足】。
+#   其余章节按 fact_types（+可选 fact_keywords / exclude_keywords）从
+#   core.evidence 取事实填充；fact_types 为空 = 无数据源，固定输出【数据不足】。
+#
+# 股权事实（持股/质押/实控人…）在采集侧与工商基础信息同标 registration，
+# 第 2/3 章用关键词互补路由（第 3 章取关键词命中项，第 2 章取其余项）。
+OWNERSHIP_KEYWORDS = [
+    "持股", "质押", "实际控制人", "控股股东", "股权", "认缴", "股本",
+    "回购", "派发", "红利", "收购", "增资", "减持", "增持", "股东",
+]
 CHAPTERS = [
     {"no": 1, "title": "摘要与结论", "source": "summary"},
-    {"no": 2, "title": "主体基本信息", "fact_types": ["registration"]},
-    {"no": 3, "title": "股权结构与实际控制人", "fact_types": []},
+    {"no": 2, "title": "主体基本信息", "fact_types": ["registration"],
+     "exclude_keywords": OWNERSHIP_KEYWORDS},
+    {"no": 3, "title": "股权结构与实际控制人", "fact_types": ["registration"],
+     "fact_keywords": OWNERSHIP_KEYWORDS},
     {"no": 4, "title": "高管团队", "fact_types": ["exec_change"]},
     {"no": 5, "title": "司法涉诉", "fact_types": ["litigation"]},
     {"no": 6, "title": "行政处罚与监管措施", "fact_types": ["penalty"]},
@@ -42,7 +51,8 @@ SCORECARD_DIMENSIONS = [
     {"key": "stability", "name": "主体稳定性", "weight": 10,
      "fact_types": ["registration"], "risk_types": []},
     {"key": "ownership", "name": "股权结构", "weight": 15,
-     "fact_types": [], "risk_types": []},
+     "fact_types": ["registration"], "risk_types": [],
+     "fact_keywords": ["持股", "质押", "实际控制人", "控股股东", "股权", "股本"]},
     {"key": "finance", "name": "财务健康", "weight": 25,
      "fact_types": ["finance"], "risk_types": []},
     {"key": "litigation", "name": "司法风险", "weight": 20,
@@ -56,7 +66,14 @@ SCORECARD_DIMENSIONS = [
 ]
 
 # 一票否决关键词：扫描事实文本，命中即整体降级（前端设计 §5.1.3）
-VETO_KEYWORDS = ["失信被执行人", "吊销", "注销", "采取强制措施"]
+# 必须用「状态类短语」而非单词，避免正常经营用语误伤：
+#   「注销回购股份」是正常资本运作 → 裸词「注销」误伤，用「已注销/注销登记」
+VETO_KEYWORDS = [
+    "失信被执行人",
+    "吊销营业执照", "已吊销",
+    "已注销", "注销登记",
+    "采取强制措施",
+]
 
 # 覆盖率阈值（前端设计 §5.1.3）
 #   >= 80%        结论可用

@@ -38,19 +38,27 @@ def investment_dd(ctx: TaskContext, input: dict) -> dict:
         rows = evidence_store.list_evidence(object_id=object_id, limit=500)
 
     with ctx.step("scorecard"):
-        ctx.set_stage("评分卡三态判定", 30)
+        ctx.set_stage("评分卡三态判定", 25)
         card = build_scorecard(rows)
 
+    with ctx.step("llm_chapters"):
+        ctx.set_stage("LLM 章节写作", 40)
+        from . import writer
+        if writer.llm_enabled():
+            drafts = writer.draft_chapters(object_row, rows)
+        else:
+            drafts = {}
+
     with ctx.step("compose_report"):
-        ctx.set_stage("组装 12 章报告", 50)
-        blocks = build_blocks(object_row, rows, card, verify_result=None)
+        ctx.set_stage("组装 12 章报告", 55)
+        blocks = build_blocks(object_row, rows, card, verify_result=None, drafts=drafts)
 
     with ctx.step("verify_evidence"):
         ctx.set_stage("证据后校验（引用 + 数字回查）", 70)
         evidence_by_id = {r["evidence_id"]: r for r in rows}
         verify_result = verify_report(blocks, evidence_by_id, object_id)
         # 后校验结果并入第 12 章附录后重算一次块
-        blocks = build_blocks(object_row, rows, card, verify_result)
+        blocks = build_blocks(object_row, rows, card, verify_result, drafts)
 
     with ctx.step("persist_artifact"):
         ctx.set_stage("落库产物与句级引用", 90)
@@ -77,6 +85,7 @@ def investment_dd(ctx: TaskContext, input: dict) -> dict:
     return {
         "artifact_id": artifact_id,
         "template_code": TEMPLATE_CODE,
+        "llm_chapters": sorted(drafts.keys()),
         "scorecard": {
             "score": card.score,
             "coverage": round(card.coverage, 4),

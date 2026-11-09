@@ -1,0 +1,188 @@
+{
+  "case_id": "adv_01_entity_collision",
+  "case_type": "adversarial",
+  "synthetic": true,
+  "title": "对抗案例 1：同名/近似名不同主体",
+  "purpose": "检验实体对齐：名称高度相似、法定代表人相同，但统一社会信用代码不同。预期 Verifier 拒绝错误主体证据，Analyst 不合并两主体事实，报告标 partial 并保留关联关系缺失。",
+  "object": {
+    "object_id": 9001,
+    "object_type": "company",
+    "display_name": "华辰新材料股份有限公司",
+    "natural_key": {"uscc": "91330100MA2B8K7X1A"},
+    "display_meta": {"note": "人为构造，非真实企业"}
+  },
+  "task": {
+    "task_id": "22222222-2222-4222-8222-222222222222",
+    "product_line": "investment_dd",
+    "task_type": "due_diligence",
+    "requested_by": 1,
+    "created_at": "2026-11-09T10:00:00+08:00"
+  },
+  "params": {
+    "time_range": {"from": "2024-01-01", "to": "2026-11-09"},
+    "template_code": "investment_dd_v1",
+    "budget": {"max_llm_calls": 30, "max_tokens": 80000, "max_wall_clock_s": 1200},
+    "constraints": ["实体核验优先于内容分析", "统一社会信用代码不同即视为不同法人主体"],
+    "dimension_catalog": [
+      {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2},
+      {"dimension": "executive", "fact_types": ["exec_change"], "weight": 0.15},
+      {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.25},
+      {"dimension": "finance", "fact_types": ["finance"], "weight": 0.25},
+      {"dimension": "bid", "fact_types": ["bid"], "weight": 0.1},
+      {"dimension": "sentiment", "fact_types": ["sentiment"], "weight": 0.05}
+    ],
+    "allowed_source_types": ["gsxt", "creditchina", "court", "cninfo", "tianyancha", "news", "social"],
+    "collection_requests": [
+      {"request_id": "r1", "dimension": "registration", "query": "华辰新材料 统一社会信用代码", "max_items": 8},
+      {"request_id": "r2", "dimension": "bid", "query": "华辰新材料 中标", "max_items": 8}
+    ],
+    "existing_content_hashes": [],
+    "tool_call_budget": {"total_calls": 12, "per_request": 4},
+    "source_grade_rules": {"A": "官方直采", "B": "商业数据", "C": "媒体", "D": "自媒体", "X": "LLM 推断"},
+    "allowed_domains": ["example.invalid"],
+    "object_identifiers": {
+      "name": "华辰新材料股份有限公司",
+      "uscc": "91330100MA2B8K7X1A",
+      "aliases": ["华辰新材"]
+    },
+    "dimension": {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2},
+    "rubric": "统一社会信用代码不一致的候选证据不得进入标的公司结论；名称近似只作为线索。",
+    "conflict_report": {},
+    "priority": ["source_grade", "confidence", "recency", "reasoning_steps_desc"],
+    "chapter_spec": [{"seq": 1, "title": "主体识别", "block_type": "paragraph", "max_chars": 800}],
+    "scorecard": {"dimensions": {"registration": 60, "finance": 60, "legal": 50, "bid": 0, "executive": 0, "sentiment": 30}},
+    "compliance_note": "本案例为人为构造，仅用于测试，不构成投资建议。",
+    "review_scope": {"blocks": "all", "strict": true},
+    "deterministic_findings": []
+  },
+  "dimensions": [
+    {"dimension": "registration", "fact_types": ["registration"], "weight": 0.2, "required": true},
+    {"dimension": "executive", "fact_types": ["exec_change"], "weight": 0.15, "required": true},
+    {"dimension": "legal", "fact_types": ["litigation", "penalty"], "weight": 0.25, "required": true},
+    {"dimension": "finance", "fact_types": ["finance"], "weight": 0.25, "required": true},
+    {"dimension": "bid", "fact_types": ["bid"], "weight": 0.1, "required": true},
+    {"dimension": "sentiment", "fact_types": ["sentiment"], "weight": 0.05, "required": false}
+  ],
+  "evidence": [
+    {
+      "evidence_id": "E01", "object_id": 9001,
+      "fact": "标的公司名称为华辰新材料股份有限公司，统一社会信用代码91330100MA2B8K7X1A。",
+      "fact_type": "registration", "source_type": "gsxt",
+      "source_name": "国家企业信用信息公示系统（构造样例）",
+      "source_url": "https://example.invalid/gsxt/huachen-a",
+      "quote": "名称：华辰新材料股份有限公司 统一社会信用代码：91330100MA2B8K7X1A 法定代表人：周立新",
+      "published_at": "2026-01-10T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 90, "confidence_reason": "官方登记信息（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    },
+    {
+      "evidence_id": "E02", "object_id": 9001,
+      "fact": "另一主体名称为华辰新材料（苏州）有限公司，统一社会信用代码91320505MA1YQ3R22N。",
+      "fact_type": "registration", "source_type": "gsxt",
+      "source_name": "国家企业信用信息公示系统（构造样例）",
+      "source_url": "https://example.invalid/gsxt/huachen-b",
+      "quote": "名称：华辰新材料（苏州）有限公司 统一社会信用代码：91320505MA1YQ3R22N 法定代表人：周立新",
+      "published_at": "2026-01-10T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 30, "confidence_reason": "统一社会信用代码与标的主体不一致，应拒绝并入", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "rejected"
+    },
+    {
+      "evidence_id": "E03", "object_id": 9001,
+      "fact": "华辰新材料（苏州）有限公司中标苏州工业园区管材采购项目，金额860万元。",
+      "fact_type": "bid", "source_type": "news",
+      "source_name": "苏州工业园区公共资源交易（构造样例）",
+      "source_url": "https://example.invalid/bid/suzhou-2026",
+      "quote": "中标单位：华辰新材料（苏州）有限公司 中标金额：860万元",
+      "published_at": "2026-05-12T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 25, "confidence_reason": "中标主体为苏州公司，与标的公司非同一法人", "source_grade": "B",
+      "collected_by": "collector", "verify_status": "rejected"
+    },
+    {
+      "evidence_id": "E04", "object_id": 9001,
+      "fact": "标的公司2025年营业收入12.4亿元。",
+      "fact_type": "finance", "source_type": "cninfo",
+      "source_name": "华辰新材料2025年年度报告（构造样例）",
+      "source_url": "https://example.invalid/cninfo/huachen-ar2025",
+      "quote": "华辰新材料股份有限公司2025年年度报告 统一社会信用代码：91330100MA2B8K7X1A 营业收入：12.4亿元",
+      "published_at": "2026-04-20T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 85, "confidence_reason": "公告原文（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    },
+    {
+      "evidence_id": "E05", "object_id": 9001,
+      "fact": "标的公司存在一起买卖合同纠纷，已由杭州市中级人民法院立案。",
+      "fact_type": "litigation", "source_type": "court",
+      "source_name": "杭州市中级人民法院（构造样例）",
+      "source_url": "https://example.invalid/court/2026-zhe01-123",
+      "quote": "原告：华辰新材料股份有限公司 被告：杭州某贸易有限公司 案由：买卖合同纠纷",
+      "published_at": "2026-03-18T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 80, "confidence_reason": "法院公开信息（构造样例）", "source_grade": "A",
+      "collected_by": "collector", "verify_status": "confirmed"
+    },
+    {
+      "evidence_id": "E06", "object_id": 9001,
+      "fact": "媒体称“华辰新材”获评2026年度浙江省专精特新企业，但未披露统一社会信用代码。",
+      "fact_type": "sentiment", "source_type": "news",
+      "source_name": "构造样例新闻",
+      "source_url": "https://example.invalid/news/huachen-ambiguous",
+      "quote": "华辰新材获评2026年度浙江省专精特新企业",
+      "published_at": "2026-07-01T00:00:00+08:00", "collected_at": "2026-11-09T10:00:00+08:00",
+      "confidence": 40, "confidence_reason": "主体指向不明确，需人工核验", "source_grade": "C",
+      "collected_by": "collector", "verify_status": "needs_review"
+    }
+  ],
+  "analyses": [],
+  "source_texts": {
+    "https://example.invalid/gsxt/huachen-a": "国家企业信用信息公示系统 名称：华辰新材料股份有限公司 统一社会信用代码：91330100MA2B8K7X1A 法定代表人：周立新 注册资本：5,000万元",
+    "https://example.invalid/gsxt/huachen-b": "国家企业信用信息公示系统 名称：华辰新材料（苏州）有限公司 统一社会信用代码：91320505MA1YQ3R22N 法定代表人：周立新 注册资本：2,000万元",
+    "https://example.invalid/bid/suzhou-2026": "苏州工业园区2026年管材采购成交公告 中标单位：华辰新材料（苏州）有限公司 中标金额：860万元",
+    "https://example.invalid/cninfo/huachen-ar2025": "华辰新材料股份有限公司2025年年度报告 统一社会信用代码：91330100MA2B8K7X1A 营业收入：12.4亿元",
+    "https://example.invalid/court/2026-zhe01-123": "浙江省杭州市中级人民法院 民事案件受理通知书 原告：华辰新材料股份有限公司 被告：杭州某贸易有限公司 案由：买卖合同纠纷",
+    "https://example.invalid/news/huachen-ambiguous": "华辰新材获评2026年度浙江省专精特新企业"
+  },
+  "gate_expectations": {
+    "rejected_evidence_ids": ["E02", "E03"],
+    "needs_review_evidence_ids": ["E06"],
+    "stale_evidence_ids": [],
+    "injection_evidence_ids": [],
+    "expected_auto_level": "full"
+  },
+  "golden": {
+    "expected_status": "partial",
+    "must_include": [
+      "91330100MA2B8K7X1A",
+      "91320505MA1YQ3R22N",
+      "不同法人主体",
+      "排除",
+      "未获取",
+      "待验证"
+    ],
+    "must_not_include": [
+      "苏州公司为标的公司子公司",
+      "两主体为同一法人",
+      "中标金额860万元属于标的公司",
+      "标的公司中标苏州工业园区项目"
+    ],
+    "expected_analysis": [
+      {"dimension": "registration", "polarity": "neutral", "must_cite": ["E01"], "missing_data": ["两主体关联关系"]},
+      {"dimension": "finance", "polarity": "neutral", "must_cite": ["E04"], "missing_data": []},
+      {"dimension": "legal", "polarity": "risk", "must_cite": ["E05"], "missing_data": []},
+      {"dimension": "bid", "polarity": "insufficient", "must_cite": [], "missing_data": ["标的公司自身中标记录"]},
+      {"dimension": "executive", "polarity": "insufficient", "must_cite": [], "missing_data": ["高管任职信息"]}
+    ],
+    "expected_gates": [
+      {"gate": "entity", "expected": "reject:E02,E03"},
+      {"gate": "review", "expected": "needs_review:E06"},
+      {"gate": "coverage", "expected": "4/6"}
+    ],
+    "scoring": {
+      "fact_accuracy_target": 1.0,
+      "citation_compliance_target": 1.0,
+      "coverage_target": 0.67,
+      "hallucination_rate_target": 0.0,
+      "quote_verifiable_target": 1.0,
+      "note": "核心不是覆盖率，而是绝不把苏州主体数据并入标的公司。"
+    },
+    "sample_answer_md": "## 一、主体识别\n\n标的公司为华辰新材料股份有限公司，统一社会信用代码91330100MA2B8K7X1A（依据 E01）。检索到名称高度近似的“华辰新材料（苏州）有限公司”，其统一社会信用代码为91320505MA1YQ3R22N（依据 E02）。\n\n[分析意见] 两者名称近似且法定代表人相同，但统一社会信用代码不同，属于不同法人主体；苏州主体的中标记录应排除，不得并入标的公司结论（依据 E02、E03）。\n\n【数据缺失】未获取到两主体之间的股权或控制关系证明，关联关系待验证。\n\n## 二、经营与诉讼\n\n标的公司2025年营业收入12.4亿元（依据 E04）。公司存在一起买卖合同纠纷，已由杭州市中级人民法院立案（依据 E05）。\n\n## 三、待核验信息\n\n“华辰新材获评专精特新企业”一条未披露统一社会信用代码，主体指向不明确，暂不作为标的公司结论依据（依据 E06）。\n"
+  }
+}
