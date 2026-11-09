@@ -4,6 +4,10 @@
 
 > 本项目仅用于**学习与实验**，不做商业用途、不分发。遵循上游 GPL-2.0 协议，版权归原作者所有。
 
+> **技术主线（B 线）**：Flask + Redis/RQ + 本地 PostgreSQL `core` schema + React/Vite。
+> 早期 M2 设计线（FastAPI + Vue3 + 小程序）已归档到分支 `archive/m2-20261104`，对应目录保留但**不参与构建**。
+
+
 ## 已完成的定制工作
 
 ### 1. 基座升级：v1.0.0 → v3.0.0
@@ -38,20 +42,25 @@
 | `init_db.sql` | 首次建库自动启用 pgvector |
 | `verify_m1.sh` | 一键验收：健康检查 → 配置 → 数据库 → 引擎启动 → 完整分析 → PDF 导出，PASS/FAIL 汇总 |
 
-### 4. 前端骨架
+### 4. 前端（`bettafish-main/frontend/`）
 
-- `web/`：Vue 3 + Vite + TypeScript + Pinia，已建登录/注册/首页/分析页骨架
-- `wxapp/`：微信小程序原生框架骨架（登录/分析/报告/个人中心规划见设计文档）
+- 产品前端：React 18 + Vite + TypeScript，工作台（案卷列表 / 任务详情 / 证据抽屉）
+- 开发：`npm run dev`（5173），`/api` 代理到 Flask
+- 生产：构建产物由 Flask 托管，单入口 `http://<host>:<PORT>/`（`PORT` 见 `.env`，默认 8080）
+- `web/`（Vue3）与 `wxapp/`（小程序）为 M2 归档代码，见各自 `LEGACY.md`，不参与构建
 
 ## 目录结构
 
 ```
 .
 ├── bettafish-main/          # BettaFish v3.0.0 基座（原版源码 + 定制文件）
+│   ├── frontend/            # 产品前端（React 18 + Vite）
+│   ├── backend/             # B 线业务层（Flask Blueprint + RQ worker + core schema）
 │   ├── design_document.md   # 定制设计文档 v2
 │   └── deploy/              # M1 部署物（compose / 环境准备 / 验收脚本）
-├── web/                     # Web 前端（Vue3 + Vite + TS）
-└── wxapp/                   # 微信小程序
+├── server/                  # [legacy] M2 FastAPI 业务层，见 LEGACY.md
+├── web/                     # [legacy] Vue3 前端，见 LEGACY.md
+└── wxapp/                   # [legacy] 微信小程序，见 LEGACY.md
 ```
 
 ## 快速开始（M1：基座部署）
@@ -75,9 +84,9 @@ bash bettafish-main/deploy/verify_m1.sh
 | 阶段 | 内容 | 状态 |
 |------|------|------|
 | M1 | 基座部署（Ubuntu + compose + .env），跑通完整分析并导出 PDF | ✅ 部署物就绪，待服务器验收 |
-| M2 | FastAPI 业务层（用户/JWT/任务索引/配置审计）+ Web 前端完整版 | ⏳ 计划中 |
+| M2 | FastAPI 业务层（用户/JWT/任务索引/配置审计）+ Web 前端完整版 | 🔁 已由 B 线替代（Flask + RQ + `core`），`server/` `web/` 归档 |
 | M3 | 微调数据管线：MindSpider 定时采集 → 清洗 → 情感标注 → SFT 数据集导出与版本管理 | ⏳ 计划中 |
-| M4 | 微信小程序：微信登录、分析进度轮询、订阅消息通知 | ⏳ 计划中 |
+| M4 | 微信小程序：微信登录、分析进度轮询、订阅消息通知 | 🔁 暂缓，`wxapp/` 归档 |
 | M5 | RAG 集成：pgvector 语料向量入库 + GraphRAG 图谱检索对接外部 RAG 软件 | ⏳ 计划中 |
 | 远期 | MiroFish 预测引擎接入、独立向量库（Milvus/Qdrant）演进、采集平台扩展 | 💡 评估中 |
 
