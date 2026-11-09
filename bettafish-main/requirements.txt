@@ -36,6 +36,8 @@ pymysql==1.1.0
 aiomysql==0.2.0
 aiosqlite==0.21.0
 redis>=4.6.0
+# RQ：dd/pr 双队列异步执行（与 redis>=4.6 兼容；1.15~2.x API 稳定）
+rq>=1.15,<3.0
 SQLAlchemy==2.0.35
 asyncpg==0.29.0
 cryptography==42.0.7

@@ -288,15 +288,19 @@ tmp/
 
 # ==== 配置和密钥 ====
 # 敏感配置文件
-/config.py
 config.ini
 secrets.json
 .secrets
 *.key
 *.pem
 *.crt
+# 各引擎/业务私有配置继续忽略
 config.py
 MindSpider/config.py
+# 例外：主配置与 worker 配置必须入库，否则干净克隆 import 失败。
+# 二者只放占位默认值，真实密钥一律走 .env（.env 已忽略）。
+!/config.py
+!backend/worker/config.py
 
 # API 密钥
 api_keys.txt
