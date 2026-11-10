@@ -109,7 +109,7 @@ git ls-remote --heads origin
 | 代码本身 | **不删除** | 归档分支 `archive/m2-20261104` 已保留完整历史 | — |
 
 **本阶段动作**：
-1. 在根 `README.md` 顶部写明"现行入口 = Flask 5000 + React 5173；`server/`、`web/`、`wxapp/` 为 M2 遗留，不参与构建"；
+1. 在根 `README.md` 顶部写明"现行入口 = Flask 8080（`.env` 的 `PORT`）+ React 5173；`server/`、`web/`、`wxapp/` 为 M2 遗留，不参与构建"；
 2. 三个目录各放一个 `LEGACY.md`（3 行说明 + 归档分支名 + 冻结点 sha）；
 3. 暂不物理删除，避免误伤历史引用。
 
@@ -177,7 +177,7 @@ git ls-remote --heads origin
 |---|---|---|---|---|
 | PostgreSQL | 是 | 5432 | 唯一事实源 | 100–300 MB |
 | Redis | 是 | 6379 | RQ 队列 + 事件流 | 10–50 MB |
-| Flask（`python app.py`） | 是 | 5000 | Web + `/api/v1` + 旧 `/api/report` | 150–250 MB |
+| Flask（`python app.py`） | 是 | 8080 | Web + `/api/v1` + 旧 `/api/report` | 150–250 MB |
 | RQ worker（`backend.worker.worker`） | 是 | 无 | 执行 dd/pr 任务 | 200–400 MB（跑 Insight 时 +800 MB–1.5 GB） |
 | RQ scheduler（`backend.worker.scheduler`） | 是 | 无 | 每 60s 扫僵死任务 | 50–80 MB |
 | React | **否**（生产用构建产物由 Flask 托管） | 5173（仅开发） | 工作台 | 开发时 200–400 MB |
@@ -247,7 +247,7 @@ git ls-remote --heads origin
 
 **里程碑定义**：
 - **M-A（W2 末）最小可用背调报告**：输入公司名 → 生成 12 章报告 → 至少 9 个事实章节有证据 → 每个角标可点开原文。
-- **M-B（W4 末）单入口工作台**：`http://server:5000/` 直接进 React 工作台，能建任务、看进度、看证据。
+- **M-B（W4 末）单入口工作台**：`http://server:8080/` 直接进 React 工作台，能建任务、看进度、看证据。
 
 ### 3.8 明确不做（本阶段主动放弃）
 
@@ -284,7 +284,7 @@ git ls-remote --heads origin
 - `core.task.requested_by BIGINT NOT NULL` 无对应用户表
 - pgvector 仅出现在 `deploy/init_db.sql:5`，`core` 无向量列，代码无读写
 - MySQL 由 MindSpider 独立配置（`DB_DIALECT=mysql`）
-- 现有端口：Flask 5000、Streamlit 8501–8503、Vite 5173
+- 现有端口：Flask 8080（`.env` 的 `PORT`，S2 已把代码默认值改为 8080）、Streamlit 8501–8503、Vite 5173
 
 **⚠️ 推断 / 未核实**
 - 服务器 `/opt/gitdownload/tongtianxiao` 状态（不可达，未连接）
